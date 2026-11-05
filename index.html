@@ -4110,6 +4110,7 @@ function discCustomCalc(pairs,mode,a,b,d){
   /* ----- correlation ----- */
   const csec=mk('d-corr',`<div class="rgw" id="cr-w"><div class="rgl"><p class="small">Select two or more columns. Two columns give the correlation r; three or more give a correlation matrix. Each correlation uses the rows where both columns have numbers.</p>
     <div class="checks" id="cr-cols"></div>
+    <div class="row"><label class="t" for="cr-al">Significance level α (for the critical value)</label><select id="cr-al"><option>0.10</option><option selected>0.05</option><option>0.01</option></select></div>
     <div class="row"><label class="t" for="cr-dec">Decimals</label><select id="cr-dec"><option>3</option><option selected>4</option><option>5</option><option>6</option></select></div>
     <div class="checks" style="margin-top:6px"><label><input type="checkbox" id="cr-sq"> Show r² (coefficient of determination)</label>
       <label><input type="checkbox" id="cr-cc"> Show conclusions about the strength of the linear relationship</label>
@@ -4131,6 +4132,7 @@ function discCustomCalc(pairs,mode,a,b,d){
     const cell=(t,j,i)=>`<${j===0?'th scope="row"':'td'} style="${j===0?'text-align:left;':'text-align:center;'}${fill[i][j]?'background:'+fill[i][j]+';':''}">${E(t)}</${j===0?'th':'td'}>`;
     return `<div class="crt"><table class="ct"><caption>${E(title)}</caption><thead><tr>${head.map((h,j)=>`<th style="text-align:${j===0?'left':'center'}">${E(h)}</th>`).join('')}</tr></thead><tbody>${rows.map((r,i)=>`<tr>${r.map((t,j)=>cell(t,j,i)).join('')}</tr>`).join('')}</tbody></table></div>`;
   };
+  const rcrit=(n,al)=>{const df=n-2;if(!(df>=1))return NaN;const tc=solveMono(x=>tCDF(x,df),1-al/2,true,0,10,true);return tc/Math.sqrt(df+tc*tc);};
   const rsq=(r,d)=>`r² = ${(r*r).toFixed(d)}: about ${(r*r*100).toFixed(1)}% of the variation in one column is explained by its linear relationship with the other; the rest is due to other factors or variation.`;
   function runCr(){
     const o=$('cr-out'),s=[...crSel].sort((a,b)=>a-b),d=+$('cr-dec').value,sq=$('cr-sq').checked,cc=$('cr-cc').checked,gr=$('cr-gr'),sp=$('cr-sp').checked;let sc2=null;lastCG=null;gr.innerHTML='';$('cr-w').classList.toggle('one',!sp);
@@ -4144,12 +4146,13 @@ function discCustomCalc(pairs,mode,a,b,d){
       const p=pairs(s[0],s[1]),t=stats(p);
       if(!t||!isFinite(t.r)){o.innerHTML='<p class="cerr" role="alert">The correlation cannot be computed: you need at least 2 rows with numbers in both columns, and neither column can be constant.</p>';return;}
       sc2={P:p,t,a:s[0],b:s[1]};
-      const head=['Columns','n','r'],row=[names[s[0]]+' and '+names[s[1]],String(t.n),t.r.toFixed(d)],fill=[null,null,heat(t.r)];
+      const al=+$('cr-al').value,rc=rcrit(t.n,al),head=['Columns','n','r','Critical value'],row=[names[s[0]]+' and '+names[s[1]],String(t.n),t.r.toFixed(d),isFinite(rc)?rc.toFixed(d):'N/A'],fill=[null,null,heat(t.r),null];
       if(sq){head.push('r²');row.push((t.r*t.r).toFixed(d));fill.push(null);}
       title='Correlation: '+names[s[0]]+' and '+names[s[1]];
-      if(cc){concl.push(`r = ${t.r.toFixed(d)} indicates a ${strength(t.r)}.`);if(sq)concl.push(rsq(t.r,d));}
+      if(cc){concl.push(`r = ${t.r.toFixed(d)} indicates a ${strength(t.r)}.`);if(sq)concl.push(rsq(t.r,d));if(isFinite(rc))concl.push(`Critical r = ${rc.toFixed(d)} (two-tailed, α = ${$('cr-al').value}, df = ${t.n-2}). Since |r| = ${Math.abs(t.r).toFixed(d)} is ${Math.abs(t.r)>rc?'greater':'not greater'} than ${rc.toFixed(d)}, the correlation ${Math.abs(t.r)>rc?'is':'is not'} statistically significant.`);}
       html=tbl(title,head,[row],[fill]);
-      g={title,plain:true,cap:'',table:{head,rows:[row],fill:[fill]}};
+      g={title,plain:true,cap:'The correlation is significant when |r| is greater than the critical r.',table:{head,rows:[row],fill:[fill]}};
+      html+=`<p class="small">${E(g.cap)}</p>`;
     }else{
       const M=s.map(a=>s.map(b=>{if(a===b)return {r:1,n:pairs(a,a).length};const p=pairs(a,b),t=stats(p);return {r:t?t.r:NaN,n:p.length};}));
       const ns=new Set(M.flat().map(m=>m.n)),head=['r',...s.map(c=>names[c])];
@@ -4167,6 +4170,11 @@ function discCustomCalc(pairs,mode,a,b,d){
       if(cc)s.forEach((a,i)=>s.forEach((b,j)=>{if(j>=i)return;const m=M[i][j];
         concl.push(isFinite(m.r)?`${names[a]} and ${names[b]}: r = ${m.r.toFixed(d)}, a ${strength(m.r)}.`+(sq?' '+rsq(m.r,d):''):`${names[a]} and ${names[b]}: the correlation cannot be computed.`);}));
       cap=(ns.size===1?'n = '+[...ns][0]+' for every pair.':'Rows with a missing value in either column are left out of that pair, so n differs between pairs (from '+Math.min(...ns)+' to '+Math.max(...ns)+').')+' Shading: darker means a stronger correlation (purple positive, orange negative). Only the lower half is shown because the upper half would repeat it.';
+      {const al=+$('cr-al').value,als=$('cr-al').value;
+        if(ns.size===1){const n0=[...ns][0],rc=rcrit(n0,al);if(isFinite(rc))cap+=` Critical r = ${rc.toFixed(d)} (two-tailed, α = ${als}, df = ${n0-2}): a correlation is significant when |r| is greater than this.`;}
+        else{const cq=s.map((a,i)=>[names[a],...s.map((b,j)=>{if(j>=i)return '';const c=rcrit(M[i][j].n,al);return isFinite(c)?c.toFixed(d):'N/A';})]);
+          html+=tbl('Critical values (two-tailed, α = '+als+'; compare |r| for each pair)',['Critical value',...head.slice(1)],cq,lfill(()=>null));
+          rows=[...rows,['Critical value',...head.slice(1)],...cq];fill=[...fill,Array(head.length).fill('#e6dff5'),...lfill(()=>null)];}}
       g={title,plain:true,cap:'',table:{head,rows,fill}};
       html+=`<p class="small">${E(cap)}</p>`;
       g.cap=cap;
@@ -4194,7 +4202,7 @@ function discCustomCalc(pairs,mode,a,b,d){
       iw.addEventListener('pointermove',show);iw.addEventListener('pointerdown',show);iw.addEventListener('pointerleave',()=>{tip.hidden=true;});
     }
   }
-  function snapCr(){const sel=new Set(crSel),dd=$('cr-dec').value,q=$('cr-sq').checked,c=$('cr-cc').checked,sp=$('cr-sp').checked,xv=$('cr-xv').value;return {sec:'d-corr',title:'Correlation',restore(){crSel=new Set(sel);$('cr-dec').value=dd;$('cr-sq').checked=q;$('cr-cc').checked=c;$('cr-sp').checked=sp;$('cr-xv').value=xv;fillCr();}};}
+  function snapCr(){const sel=new Set(crSel),dd=$('cr-dec').value,al=$('cr-al').value,q=$('cr-sq').checked,c=$('cr-cc').checked,sp=$('cr-sp').checked,xv=$('cr-xv').value;return {sec:'d-corr',title:'Correlation',restore(){crSel=new Set(sel);$('cr-dec').value=dd;$('cr-al').value=al;$('cr-sq').checked=q;$('cr-cc').checked=c;$('cr-sp').checked=sp;$('cr-xv').value=xv;fillCr();}};}
   $('crwin').onclick=async()=>{
     runCr();if(!lastC)return;
     const g={...lastC,edit:snapCr()};
@@ -4210,6 +4218,7 @@ function discCustomCalc(pairs,mode,a,b,d){
     <div class="rgl">
       <div class="row"><label class="t" for="rg-x">Explanatory variable (x)</label><select id="rg-x"></select></div>
       <div class="row"><label class="t" for="rg-y">Response variable (y)</label><select id="rg-y"></select></div>
+      <div class="row"><label class="t" for="rg-al">Significance level α (for the critical value)</label><select id="rg-al"><option>0.10</option><option selected>0.05</option><option>0.01</option></select></div>
       <div class="row"><label class="t" for="rg-dec">Decimals</label><select id="rg-dec"><option>3</option><option selected>4</option><option>5</option><option>6</option></select></div>
       <div id="rg-out" aria-live="polite"></div>
       <div class="row" style="margin-top:10px"><button class="primary" id="rgwin" disabled>Show results in a new window</button></div>
@@ -4271,11 +4280,11 @@ function discCustomCalc(pairs,mode,a,b,d){
     const P=pairs(+a,+b),t=stats(P);
     if(!t||!isFinite(t.b1)||!isFinite(t.r)){o.innerHTML='<p class="cerr" role="alert">The regression cannot be computed: you need at least 2 rows with numbers in both columns, and neither column can be constant.</p>';return;}
     lastR=P.map(q=>({i:q.i,x:q.x,y:q.y,f:t.b0+t.b1*q.x,e:q.y-(t.b0+t.b1*q.x)}));
-    const xn=names[+a],yn=names[+b],sg=t.b1<0?'−':'+';
+    const xn=names[+a],yn=names[+b],sg=t.b1<0?'−':'+',als=$('rg-al').value,rcv=rcrit(t.n,+als),rcs=isFinite(rcv)?rcv.toFixed(d):'N/A',sigt=isFinite(rcv)?`Critical r = ${rcs} (two-tailed, α = ${als}, df = ${t.n-2}). Since |r| = ${Math.abs(t.r).toFixed(d)} is ${Math.abs(t.r)>rcv?'greater':'not greater'} than ${rcs}, the linear relationship ${Math.abs(t.r)>rcv?'is':'is not'} statistically significant.`:'';
     let h=`<p style="font-size:1.1em;margin:10px 0 4px"><b>ŷ = b₀ + b₁x = ${t.b0.toFixed(d)} ${sg} ${Math.abs(t.b1).toFixed(d)}x</b></p>
       <p class="small">where ŷ is the predicted ${E(yn)} and x is ${E(xn)}. Intercept b₀ = ${t.b0.toFixed(d)}; slope b₁ = ${t.b1.toFixed(d)}.</p>
-      <table class="ct"><thead><tr><th>n</th><th>r</th><th>r²</th><th>Intercept b₀</th><th>Slope b₁</th></tr></thead><tbody><tr><td>${t.n}</td><td>${t.r.toFixed(d)}</td><td>${(t.r*t.r).toFixed(d)}</td><td>${t.b0.toFixed(d)}</td><td>${t.b1.toFixed(d)}</td></tr></tbody></table>
-      <p class="small">r² = ${(t.r*t.r*100).toFixed(1)}% of the variation in ${E(yn)} is explained by the linear relationship with ${E(xn)}.</p>`;
+      <table class="ct"><thead><tr><th>n</th><th>r</th><th>r²</th><th>Critical value</th><th>Intercept b₀</th><th>Slope b₁</th></tr></thead><tbody><tr><td>${t.n}</td><td>${t.r.toFixed(d)}</td><td>${(t.r*t.r).toFixed(d)}</td><td>${rcs}</td><td>${t.b0.toFixed(d)}</td><td>${t.b1.toFixed(d)}</td></tr></tbody></table>
+      <p class="small">r² = ${(t.r*t.r*100).toFixed(1)}% of the variation in ${E(yn)} is explained by the linear relationship with ${E(xn)}.</p><p class="small">${E(sigt)}</p>`;
     let pred=null,ph='';
     if(sc&&$('rg-pr').checked){
       const s=$('rg-px').value.trim();
@@ -4299,8 +4308,8 @@ function discCustomCalc(pairs,mode,a,b,d){
       if(pred){eqs.push(`Prediction: when x = ${fmt(pred.x)}, ŷ = ${t.b0.toFixed(d)} ${sg} ${Math.abs(t.b1).toFixed(d)}(${fmt(pred.x)}) = ${pred.y.toFixed(d)}`);const xs2=P.map(q=>q.x);if(pred.x<Math.min(...xs2)||pred.x>Math.max(...xs2))eqs.push('Caution: this x is outside the range of the data, so the prediction is an extrapolation and may be unreliable.');}
       lastRG={title:'Regression: '+yn+' on '+xn,plain:true,
         pre:[`ŷ = b₀ + b₁x = ${t.b0.toFixed(d)} ${sg} ${Math.abs(t.b1).toFixed(d)}x`,`ŷ is the predicted ${yn}; x is ${xn}.`],
-        table:{head:['n','r','r²','Intercept b₀','Slope b₁'],rows:[[String(t.n),t.r.toFixed(d),(t.r*t.r).toFixed(d),t.b0.toFixed(d),t.b1.toFixed(d)]]},
-        eq:eqs,cap:`r² = ${(t.r*t.r*100).toFixed(1)}% of the variation in ${yn} is explained by the linear relationship with ${xn}.`};
+        table:{head:['n','r','r²','Critical value','Intercept b₀','Slope b₁'],rows:[[String(t.n),t.r.toFixed(d),(t.r*t.r).toFixed(d),rcs,t.b0.toFixed(d),t.b1.toFixed(d)]]},
+        eq:eqs,cap:`r² = ${(t.r*t.r*100).toFixed(1)}% of the variation in ${yn} is explained by the linear relationship with ${xn}. ${sigt}`};
       $('rgwin').disabled=false;
     }
     if(sc){
@@ -4322,8 +4331,8 @@ function discCustomCalc(pairs,mode,a,b,d){
   }
   rsec.addEventListener('input',e=>{if(e.target.id==='rg-px')runRg();});
   rsec.addEventListener('change',runRg);
-  function snapRg(){const v={x:$('rg-x').value,y:$('rg-y').value,d:$('rg-dec').value,sc:$('rg-sc').checked,ln:$('rg-ln').checked,pr:$('rg-pr').checked,rs:$('rg-rs').checked,px:$('rg-px').value};
-    return {sec:'d-reg',title:'Regression',restore(){$('rg-x').value=v.x;$('rg-y').value=v.y;$('rg-dec').value=v.d;$('rg-sc').checked=v.sc;$('rg-ln').checked=v.ln;$('rg-pr').checked=v.pr;$('rg-rs').checked=v.rs;$('rg-px').value=v.px;fillRg(true);}};}
+  function snapRg(){const v={x:$('rg-x').value,y:$('rg-y').value,d:$('rg-dec').value,al:$('rg-al').value,sc:$('rg-sc').checked,ln:$('rg-ln').checked,pr:$('rg-pr').checked,rs:$('rg-rs').checked,px:$('rg-px').value};
+    return {sec:'d-reg',title:'Regression',restore(){$('rg-x').value=v.x;$('rg-y').value=v.y;$('rg-dec').value=v.d;$('rg-al').value=v.al;$('rg-sc').checked=v.sc;$('rg-ln').checked=v.ln;$('rg-pr').checked=v.pr;$('rg-rs').checked=v.rs;$('rg-px').value=v.px;fillRg(true);}};}
   $('rgwin').onclick=async()=>{runRg();if(!lastRG)return;const g={...lastRG,edit:snapRg()};try{makePop(g,await pngCanvas(g));}catch(e){}};
   rsec.addEventListener('click',async e=>{
     if(e.target.id==='rg-win'&&lastG){
