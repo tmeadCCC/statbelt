@@ -147,6 +147,7 @@ table.ct{width:100%;margin-top:8px}
 .pb0{fill:var(--acc);fill-opacity:.3;stroke:var(--acc);stroke-width:2}
 .pb1{fill:var(--acc);stroke:var(--paper);stroke-width:1}
 .nc{fill:none;stroke:var(--ink);stroke-width:2}.ns{fill:var(--acc);fill-opacity:.55;stroke:none}.nz{stroke:#b03a2e;stroke-width:2;fill:none}.nzt{fill:#b03a2e;font-size:15px;font-weight:700}.sha{fill:var(--ink);font-size:15px;font-weight:600;font-family:inherit}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .nz{stroke:#ff8f84}:root:not([data-theme="light"]) .nzt{fill:#ff8f84}}:root[data-theme="dark"] .nz{stroke:#ff8f84}:root[data-theme="dark"] .nzt{fill:#ff8f84}
 .fcap{margin-top:4px}
 .fcap p{margin:3px 0}
 .fcap .sym{font-weight:600;font-size:15px}
@@ -169,6 +170,16 @@ table.ct{width:100%;margin-top:8px}
 .dtab input{width:130px;font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:5px;background:var(--paper);color:var(--ink)}
 .iw{position:relative}
 .pop.mini{resize:none;width:auto!important;min-width:0}
+.pop.min{display:none}
+.pop .mn{padding:2px 10px;font-size:18px;line-height:1.2;margin-right:4px}
+#poptray{position:fixed;left:8px;right:8px;bottom:8px;z-index:9000;display:flex;gap:8px;align-items:center;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:5px 8px;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+#poptray[hidden]{display:none}
+#poptray .tl{font-size:12px;font-weight:600;color:var(--mute);white-space:nowrap}
+#poptray .tc{display:flex;gap:6px;overflow-x:auto;flex:1;min-width:0}
+#poptray .chip{white-space:nowrap;max-width:210px;overflow:hidden;text-overflow:ellipsis;padding:4px 10px;font-size:13px;flex:none}
+#poptray .chip.isMin{font-style:italic;border-style:dashed}
+#poptray .chip.act{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+#poptray .tb{padding:4px 10px;font-size:13px;white-space:nowrap;flex:none}
 .pop.mini .pb,.pop.mini .pf{display:none}
 .pop.mini .ph span::after{content:" (editing)";font-weight:400;color:var(--mute)}
 .pop:not(.mini) .rs{display:none}
@@ -476,6 +487,7 @@ details.m>summary{display:none}
         <div class="row"><label class="t" for="hw">Bin width</label><input id="hw" type="number" step="any" min="0"></div>
         <div class="row" style="margin-top:6px"><label class="t" for="hy">Bar height</label><select id="hy"><option value="f">Frequency</option><option value="r">Relative frequency</option></select></div>
         <div class="checks" style="margin-top:6px"><label><input type="checkbox" id="hvals">Show values above the bars</label></div>
+        <div class="checks" id="hstackrow" style="margin-top:6px" hidden><label><input type="checkbox" id="hstack">Stack the histograms on one horizontal axis</label></div>
         <div class="checks" style="margin-top:6px"><label><input type="checkbox" id="hmean">Show mean (x̄) in green</label><label><input type="checkbox" id="hmed">Show median (M) in red</label></div>
         <h3 style="margin:12px 0 6px;font-size:13px">Highlight data values</h3>
         <div class="row"><button id="hlclear">Clear selection</button></div>
@@ -1020,6 +1032,25 @@ function gHist(v,name,ref){
   const cap=`${nb} bins, starting at ${s}, each ${w} wide. A bin includes its left edge but not its right edge.`+(showM?` Mean = ${+mean.toFixed(dd)}.`:'')+(showD?` Median = ${+mdn.toFixed(dd)}.`:'');
   return {bins:{s,w,nb,cnt},svg:frame(o),cap:cap+(rel?' Bar heights show relative frequency.':'')+($('hvals').checked&&nb>30?' Bar values are hidden when there are more than 30 bins.':'')};
 }
+function gHistStack(groups,axis){
+  const all=groups.flatMap(g=>g[1]),B=gHist(all,axis,all);if(B.err)return B;
+  const {s,w,nb}=B.bins,rel=$('hy').value==='r',showV=$('hvals').checked&&nb<=30,dd=+$('dec').value,n=groups.length;
+  const cnts=groups.map(([k,v])=>{const c=Array(nb).fill(0);v.forEach(x=>c[Math.min(nb-1,Math.floor((x-s)/w+1e-9))]++);return rel?c.map(q=>q/v.length):c;});
+  const ymax=Math.max(...cnts.flat()),st=rel?niceStep(ymax/2):Math.max(1,niceStep(ymax/2)),top=Math.ceil(ymax/st-1e-9)*st;
+  const Hh=Math.max(GH,MT+MB+n*96),band=(Hh-MT-MB)/n;
+  let o='';
+  groups.forEach(([nm],i)=>{
+    const bt=MT+i*band,y0=bt+band,pt=bt+20,hg=y0-pt,sy=c=>y0-c*hg/top;
+    for(let k=0;k<=Math.round(top/st);k++){const c=+(k*st).toPrecision(10);o+=`<line class="gr" x1="${ML}" x2="${GW-MR}" y1="${sy(c)}" y2="${sy(c)}"/>`+tx(ML-8,sy(c)+4,rel?+c.toFixed(dd):c,'end');}
+    cnts[i].forEach((c,j)=>{o+=`<rect class="bar" x="${ML+j*PW/nb}" y="${sy(c)}" width="${PW/nb}" height="${hg*c/top}"/>`;if(showV&&c>0)o+=tx(ML+j*PW/nb+PW/nb/2,sy(c)-3,rel?+c.toFixed(dd):c,'middle');});
+    o+=`<line class="ax" x1="${ML}" x2="${GW-MR}" y1="${y0}" y2="${y0}"/><line class="ax" x1="${ML}" x2="${ML}" y1="${pt-4}" y2="${y0}"/>`+tx(ML+4,bt+14,E(nm.length>40?nm.slice(0,39)+'…':nm),'start','lbl b');
+  });
+  const yb=Hh-MB,ev=Math.ceil(nb/12);
+  for(let i=0;i<=nb;i+=ev) o+=`<line class="ax" x1="${ML+i*PW/nb}" x2="${ML+i*PW/nb}" y1="${yb}" y2="${yb+5}"/>`+tx(ML+i*PW/nb,yb+27,+(s+i*w).toPrecision(12));
+  o+=tx(ML+PW/2,Hh-8,E(axis),'middle','lbl b')+`<text class="lbl b" transform="translate(14 ${MT+(Hh-MT-MB)/2}) rotate(-90)" text-anchor="middle">${rel?'Relative frequency':'Frequency'}</text>`;
+  const extra=($('hmean').checked||$('hmed').checked)?' Mean and median lines are not drawn on stacked histograms.':'';
+  return {svg:`<svg class="gsvg" viewBox="0 0 ${GW} ${Hh}" role="img" aria-label="Graph">${o}</svg>`,gh:Hh,cap:`${n} histograms stacked above one common horizontal axis and one common vertical scale. ${nb} bins, starting at ${s}, each ${w} wide. A bin includes its left edge but not its right edge.`+(rel?' Bar heights show relative frequency within each group.':'')+extra};
+}
 function gBox(v,name){
   {const mc=boxCols();if(mc.length>1) return gBoxMulti(mc);}
   const s=[...v].sort((a,b)=>a-b);
@@ -1141,6 +1172,7 @@ function drawGraph(){
   const c=+$('gcol').value;
   $('gcolrow').hidden=(t==='ts'||(t==='box'&&!$('ggroup').value));
   $('bcolbox').hidden=!!$('ggroup').value;
+  $('hstackrow').hidden=!(t==='hist'&&$('ggroup').value!=='');
   placeGroup(t);
   ['hist','box','stem','dot','ts','qq'].forEach(k=>$('o-'+k).hidden=(k!==t));
   $('hs').disabled=$('hw').disabled=$('hauto').checked;
@@ -1243,7 +1275,7 @@ GS=SCHEMES.purple;
 const TYPES={hist:'Histogram',box:'Boxplot',stem:'Stem and leaf plot',dot:'Dot plot',ts:'Time series plot',qq:'Q-Q plot'};
 function exportSvg(html,big){
   const d=document.createElement('div');d.innerHTML=html;const s=d.firstElementChild;
-  s.setAttribute('width',GW*2);s.setAttribute('height',GH*2);s.removeAttribute('class');
+  s.setAttribute('width',GW*2);s.setAttribute('height',(+(s.getAttribute('viewBox')||'').split(' ')[3]||GH)*2);s.removeAttribute('class');
   s.querySelectorAll('[class]').forEach(el=>{let st='';el.getAttribute('class').split(' ').forEach(k=>{if(EXS[k])st+=EXS[k].split('#6b46c1').join(GS.acc).split('#e6dff5').join(GS.light).split('#000001').join(GS.mid).split('#000002').join(GS.soft)+';';if(k==='b')st+='font-size:13px;font-weight:600;';if(big&&k==='nzt')st+='font-size:22px;';if(big&&k==='sha')st+='font-size:19px;';});el.setAttribute('style',st);el.removeAttribute('class');});
   return new XMLSerializer().serializeToString(s);
 }
@@ -1283,7 +1315,7 @@ function mathLayout(ctx,blocks,maxW){
 async function pngCanvas(g){
   const S=2,W=GW,m=document.createElement('canvas').getContext('2d');
   let img=null,fh,fw=W;
-  if(g.svg){img=await svgImg(exportSvg(g.svg,g.big));fh=GH;}
+  if(g.svg){img=await svgImg(exportSvg(g.svg,g.big));fh=g.gh||GH;}
   else if(g.math){g._ml=mathLayout(m,g.math,W-40);fw=Math.max(W,g._ml.width+40);fh=g._ml.height+16;}
   else if(g.lines){m.font='15px Menlo,Consolas,monospace';fw=Math.max(W,Math.max(...g.lines.map(l=>m.measureText(l).width))+40);fh=g.lines.length*24+16;}
   else{m.font='600 14px Arial,sans-serif';const T0=g.table;
@@ -1300,7 +1332,7 @@ async function pngCanvas(g){
   x.textAlign=g.big?'center':'left';x.fillStyle='#241a3a';x.font=g.big?'700 24px Arial,sans-serif':'600 18px Arial,sans-serif';x.fillText(g.title,g.big?fw/2:16,g.big?33:30);x.textAlign='left';
   if(PH){x.font='15px Arial,sans-serif';(g.pre||[]).forEach((l,i)=>x.fillText(l,16,52+i*22));}
   x.save();x.translate(0,PH);
-  if(img) x.drawImage(img,(fw-W)/2,44,W,GH);
+  if(img) x.drawImage(img,(fw-W)/2,44,W,g.gh||GH);
   else if(g.math){let yy=44+8;g._ml.rows.forEach(r=>{x.save();x.translate(20,yy);r.draw(x,0);x.restore();yy+=r.h;});}
   else if(g.lines){x.font='15px Menlo,Consolas,monospace';g.lines.forEach((l,i)=>x.fillText(l,20,44+20+i*24));}
   else{
@@ -1382,7 +1414,7 @@ function makePop(g,cv){
   const old=editTarget;
   if(old&&old.isConnected&&g.edit&&old._sec===g.edit.sec){p.style.left=old.style.left;p.style.top=old.style.top;p.style.width=old.style.width;if(old._batch)document.querySelectorAll('.pop').forEach(q=>{if(q!==old&&q._batch===old._batch)q.remove();});old.remove();}
   editTarget=null;
-  p.innerHTML=`<div class="ph"><span>${E(g.title)}</span><button class="x" aria-label="Close graph">\u00d7</button></div><div class="pb"><div class="iw"><img alt="${E(g.title)}"><div class="tip" hidden></div></div></div><div class="pf"><button class="primary" data-a="copy">Copy image</button><button data-a="save">Save PNG</button><button data-a="edit">Edit</button><span class="pm" role="status">You can also right-click (or long-press) the image to copy or save it.</span></div>`;
+  p.innerHTML=`<div class="ph"><span>${E(g.title)}</span><button class="mn" aria-label="Minimize window" title="Minimize (restore it from the Windows bar at the bottom)">\u2013</button><button class="x" aria-label="Close graph">\u00d7</button></div><div class="pb"><div class="iw"><img alt="${E(g.title)}"><div class="tip" hidden></div></div></div><div class="pf"><button class="primary" data-a="copy">Copy image</button><button data-a="save">Save PNG</button><button data-a="edit">Edit</button><span class="pm" role="status">You can also right-click (or long-press) the image to copy or save it.</span></div>`;
   p.querySelector('img').src=cv.toDataURL('image/png');
   if(g.hist) setupHist(p,g,cv);
   if(g.sc) setupSc(p,g,cv);
@@ -1404,6 +1436,7 @@ function makePop(g,cv){
     iw.addEventListener('pointermove',show);iw.addEventListener('pointerdown',show);iw.addEventListener('pointerleave',()=>{tip.hidden=true;});
   }
   p.querySelector('.x').onclick=()=>{if(editTarget===p)editTarget=null;p.remove();};
+  p.querySelector('.mn').onclick=()=>popMin(p,true);
   const rs=document.createElement('button');rs.className='rs';rs.textContent='Show';
   rs.title='Show this display using the current options';
   rs.onclick=async()=>{
@@ -1439,7 +1472,7 @@ function makePop(g,cv){
     try{await saveFile(g.title.replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'-')+'.png',await toBlob(cv));pm.textContent='Saved (check your Downloads folder if you do not see a prompt). If nothing was saved, right-click the image and choose Save image as.';}
     catch(e){pm.textContent=(e&&e.code==='declined')?'Save canceled.':'Saving did not work here. Right-click (or long-press) the image and choose Save image as.';}
   };
-  document.body.appendChild(p);p.focus();
+  document.body.appendChild(p);p.focus();trayUpdate();
 }
 
 /* ---------- histogram: highlight values and classes ---------- */
@@ -1957,6 +1990,41 @@ function markBad(){
     if(t&&n>=t) data.forEach((r,i)=>{if(r[c].trim()!==''&&!isNum(r[c])){const e=cell(i,c);if(e)e.classList.add('bad');}});
   }
 }
+/* ----- Windows bar: minimize, restore and tile result windows ----- */
+function popMin(p,on){p.classList.toggle('min',on);if(!on){p.style.zIndex=++zTop;}trayUpdate();}
+function trayUpdate(){
+  let tr=document.getElementById('poptray');
+  if(!tr){
+    tr=document.createElement('div');tr.id='poptray';tr.hidden=true;tr.setAttribute('role','toolbar');tr.setAttribute('aria-label','Open result windows');
+    tr.innerHTML='<span class="tl">Windows</span><div class="tc"></div><button class="tb" data-a="tile" title="Arrange the open windows side by side">Tile</button><button class="tb" data-a="minall">Minimize all</button><button class="tb" data-a="showall">Show all</button>';
+    document.body.appendChild(tr);
+    tr.addEventListener('click',e=>{
+      const c=e.target.closest('.chip'),b=e.target.closest('.tb'),all=[...document.querySelectorAll('.pop')];
+      if(c){const p=all[+c.dataset.i];if(!p)return;
+        const top=Math.max(...all.filter(q=>!q.classList.contains('min')).map(q=>+q.style.zIndex||0),0);
+        if(p.classList.contains('min'))popMin(p,false);
+        else if((+p.style.zIndex||0)>=top&&all.filter(q=>!q.classList.contains('min')).length>=1)popMin(p,true);
+        else{p.style.zIndex=++zTop;trayUpdate();}
+        return;}
+      if(!b)return;
+      if(b.dataset.a==='minall')all.forEach(q=>q.classList.add('min'));
+      else if(b.dataset.a==='showall')all.forEach(q=>q.classList.remove('min'));
+      else if(b.dataset.a==='tile'){
+        all.forEach(q=>q.classList.remove('min'));
+        const n=all.length;if(!n)return;
+        const cols=innerWidth<700?1:(n<=3?n:Math.ceil(n/2)),rows=Math.ceil(n/cols),gap=8,top0=52,aw=innerWidth-16,ah=innerHeight-top0-56;
+        const w=(aw-(cols-1)*gap)/cols,h=Math.max(140,(ah-(rows-1)*gap)/rows);
+        all.forEach((q,i)=>{q.style.left=(8+(i%cols)*(w+gap))+'px';q.style.top=(top0+Math.floor(i/cols)*(h+gap))+'px';q.style.width=w+'px';q.style.height=h+'px';q.style.zIndex=++zTop;});
+      }
+      trayUpdate();
+    });
+    new MutationObserver(()=>trayUpdate()).observe(document.body,{childList:true});
+  }
+  const all=[...document.querySelectorAll('.pop')];
+  tr.hidden=!all.length;document.body.style.paddingBottom=all.length?'56px':'';
+  const top=Math.max(...all.filter(q=>!q.classList.contains('min')).map(q=>+q.style.zIndex||0),-1);
+  tr.querySelector('.tc').innerHTML=all.map((q,i)=>{const m=q.classList.contains('min'),a=!m&&(+q.style.zIndex||0)===top;return `<button class="chip${m?' isMin':''}${a?' act':''}" data-i="${i}" title="${E(q.getAttribute('aria-label')||'')}${m?' (minimized: click to show)':a?' (click to minimize)':' (click to bring to front)'}">${E(q.getAttribute('aria-label')||'Window')}</button>`;}).join('');
+}
 function miniBatch(p,on){document.querySelectorAll('.pop').forEach(q=>{if(q===p||(p._batch&&q._batch===p._batch)) q.classList.toggle('mini',on);});}
 var tSel=Array(COLS).fill(false),tManual=Array(COLS).fill(false);
 function fillTsChecks(){
@@ -2049,7 +2117,7 @@ async function makeGrouped(ge){
   const pop=async(title,f,label)=>{
     if(f.err){skipped.push(`${label}: ${f.err}`);return;}
     const g={title,cap:f.cap||'',edit,batch};
-    if(f.svg){g.svg=f.svg;g.hot=f.hot;if(f.sc)g.sc=f.sc;}
+    if(f.svg){g.svg=f.svg;g.hot=f.hot;if(f.sc)g.sc=f.sc;if(f.gh)g.gh=f.gh;}
     else{const d=document.createElement('div');d.innerHTML=f.html;g.lines=d.querySelector('pre').textContent.split('\n');}
     makePop(g,await pngCanvas(g));n++;
   };
@@ -2066,13 +2134,14 @@ async function makeGrouped(ge){
       if(!grps.length){ge.textContent='Choose a column of numbers and a Group by column that both have data.';return;}
       if(grps.length>12){ge.textContent=`The Group by column has ${grps.length} categories. Choose one with 12 or fewer.`;return;}
       if(t==='box') await pop(`Boxplots of ${names[c]} by ${names[gc]}`,gBoxMulti([],grps,names[c],{c,gc}),'Boxplots');
+      else if(t==='hist'&&$('hstack').checked) await pop(`Stacked histograms of ${names[c]} by ${names[gc]}`,gHistStack(grps,names[c]),'Histograms');
       else if(t==='dot') await pop(`Dot plots of ${names[c]} by ${names[gc]}`,gDotStack(grps,names[c],{c,gc}),'Dot plots');
       else{
         const ref=[].concat(...grps.map(x=>x[1]));
         for(const [k,v] of grps){const nm=`${names[c]} (${k})`;await pop(`${TYPES[t]} of ${nm}`,t==='hist'?gHist(v,nm,ref):t==='stem'?gStem(v,nm):t==='qq'?gQQ(v,nm):gDot(v,nm),k);}
       }
     }
-    ge.textContent=(n?`Opened ${n} graph${n>1?'s':''}${(t==='box'||t==='dot')?' (groups on the same axis)':', one per group'}. `:'')+(skipped.length?`Skipped: ${skipped.join('; ')}`:'');
+    ge.textContent=(n?`Opened ${n} graph${n>1?'s':''}${(t==='box'||t==='dot'||(t==='hist'&&$('hstack').checked))?' (groups on the same axis)':', one per group'}. `:'')+(skipped.length?`Skipped: ${skipped.join('; ')}`:'');
   }catch(err){ge.textContent='The graphs could not be drawn. Please try again.';}
 }
 
@@ -2273,7 +2342,7 @@ const CONT={
       if(!(P.lo<P.hi)) return {err:'The minimum must be less than the maximum.'};
       const w=P.hi-P.lo,cdf=x=>x<=P.lo?0:x>=P.hi?1:(x-P.lo)/w,sf=x=>x<=P.lo?1:x>=P.hi?0:(P.hi-x)/w;
       return {cdf,sf,qL:p=>P.lo+p*w,qR:p=>P.hi-p*w,lo:P.lo,hi:P.hi,fixedLo:false,
-        rows:[['Minimum',cfx(P.lo)],['Maximum',cfx(P.hi)],['Mean μ = (min + max)/2',cfx((P.lo+P.hi)/2)],['Standard deviation σ',String(+(w/Math.sqrt(12)).toPrecision(7))]]};
+        rows:[['Minimum',cfx(P.lo)],['Maximum',cfx(P.hi)],['Height 1/(max − min)',String(+(1/w).toPrecision(7))],['Mean μ = (min + max)/2',cfx((P.lo+P.hi)/2)],['Standard deviation σ',String(+(w/Math.sqrt(12)).toPrecision(7))]]};
     }}
 };
 function contCalc(D,mode,d,v,P){
@@ -2491,8 +2560,8 @@ function discCustomCalc(pairs,mode,a,b,d){
       res.segs.forEach(([a,b])=>{a=Math.max(a,x0);b=Math.min(b,x1);if(b>a)o+=`<path class="ns" d="M${sx(a).toFixed(1)} ${y0}${path(a,b)} L${sx(b).toFixed(1)} ${y0} Z"/>`;});
       o+=`<path class="nc" d="M${path(x0,x1).slice(2)}"/><line class="ax" x1="${ML}" x2="${GW-MR}" y1="${y0}" y2="${y0}"/>`;
       if(ax==='sd'){
-        for(let k=-Math.floor(zm);k<=Math.floor(zm);k++){const x=mu+k*sd;
-          o+=`<line class="ax" x1="${sx(x)}" x2="${sx(x)}" y1="${y0}" y2="${y0+5}"/>`+tx(sx(x),y0+19,E(cfx(x)))+tx(sx(x),y0+34,k===0?'μ':'μ '+(k<0?'−':'+')+' '+(Math.abs(k)===1?'':Math.abs(k))+'σ');}
+        for(let k=-Math.floor(zm);k<=Math.floor(zm);k++){const x=mu+k*sd,xr=Math.abs(sd)<0.05?+x.toPrecision(4):+x.toFixed(2);
+          o+=`<line class="ax" x1="${sx(x)}" x2="${sx(x)}" y1="${y0}" y2="${y0+5}"/>`+(k%(zm>6?2:1)?'':tx(sx(x),y0+19,E(String(Math.abs(xr)<1e-9?0:xr)))+tx(sx(x),y0+34,k===0?'μ':'μ '+(k<0?'−':'+')+' '+(Math.abs(k)===1?'':Math.abs(k))+'σ'));}
       }else{
         ticks(x0,x1,8).forEach(t=>o+=`<line class="ax" x1="${sx(t)}" x2="${sx(t)}" y1="${y0}" y2="${y0+5}"/>`+tx(sx(t),y0+19,E(cfx(t))));
       }
@@ -2506,6 +2575,8 @@ function discCustomCalc(pairs,mode,a,b,d){
       let o='';
       res.segs.forEach(([p,q])=>{p=Math.max(p,lo);q=Math.min(q,hi);if(q>p)o+=`<rect class="ns" x="${sx(p).toFixed(1)}" y="${yh}" width="${(sx(q)-sx(p)).toFixed(1)}" height="${y0-yh}"/>`;});
       o+=`<path class="nc" d="M${sx(x0)} ${y0} L${sx(lo)} ${y0} L${sx(lo)} ${yh} L${sx(hi)} ${yh} L${sx(hi)} ${y0} L${sx(x1)} ${y0}"/><line class="ax" x1="${ML}" x2="${GW-MR}" y1="${y0}" y2="${y0}"/>`;
+      {const hs=String(+(1/w).toPrecision(4));
+        o+=`<line class="ax" x1="${ML}" x2="${ML}" y1="${yh-8}" y2="${y0}"/><line class="ax" x1="${ML-5}" x2="${ML}" y1="${yh}" y2="${yh}"/><line class="ax" x1="${ML-5}" x2="${ML}" y1="${y0}" y2="${y0}"/>`+tx(ML-8,yh+4,E(hs),'end')+tx(ML-8,y0+4,'0','end')+tx(ML-8,yh-14,'Height','end');}
       ticks(x0,x1,8).forEach(t=>o+=`<line class="ax" x1="${sx(t)}" x2="${sx(t)}" y1="${y0}" y2="${y0+5}"/>`+tx(sx(t),y0+19,E(cfx(t))));
       res.marks.forEach((m,mi)=>{const two=res.marks.length>1,an=!two?'middle':(mi===0?'end':'start'),dx=!two?0:(mi===0?-5:5),yy=Math.min(yh,m>=lo&&m<=hi?yh:y0);
         o+=`<line class="nz" x1="${sx(m)}" x2="${sx(m)}" y1="${yy-6}" y2="${y0}"/>`+`<text class="nzt" x="${sx(m)+dx}" y="${yy-10}" text-anchor="${an}">${E(String(+m.toFixed(d)))}</text>`;});
@@ -4164,7 +4235,8 @@ function discCustomCalc(pairs,mode,a,b,d){
     <p class="small" id="cr-yn" hidden></p>
     <p class="small" id="cr-cc-sq-note" hidden>Turn on “Show r²” to also see an interpretation of r².</p>
     <div id="cr-out" aria-live="polite"></div>
-    <div class="row" style="margin-top:10px"><button class="primary" id="crwin" disabled>Show results in a new window</button></div><p class="small">The window lets you copy the table as an image, save it as a PNG, or edit the selection.</p></div><div class="rgr"><div id="cr-gr"></div></div></div>`);
+    <div class="row" style="margin-top:10px"><button class="primary" id="crwin" disabled>Show results in a new window</button></div><p class="small">The window lets you copy the table as an image, save it as a PNG, or edit the selection.</p>
+    <div class="row" style="margin-top:10px"><button class="cr-toreg" id="cr-toreg" disabled>Open selected columns in the regression menu</button></div><p class="small" id="cr-toreg-n">Select exactly two columns to use this.</p></div><div class="rgr"><div id="cr-gr"></div></div></div>`);
   let crSel=new Set();
   function fillCr(){
     const nc=numCols();crSel=new Set([...crSel].filter(i=>nc.includes(i)));
@@ -4184,7 +4256,7 @@ function discCustomCalc(pairs,mode,a,b,d){
     const xr=sp&&s.length===2;$('cr-xrow').hidden=!xr;$('cr-yn').hidden=!xr;
     if(xr){const xv=$('cr-xv'),ov=xv.value;xv.innerHTML=s.map(i=>`<option value="${i}">${E(names[i])}</option>`).join('');xv.value=s.map(String).includes(ov)?ov:String(s[0]);$('cr-yn').textContent='Response variable (y): '+names[s.find(i=>String(i)!==xv.value)];}
     if(sp&&s.length!==2)gr.innerHTML='<p class="small" role="status">Select exactly two columns to see a scatterplot.</p>';
-    $('cr-cc-sq-note').hidden=!(cc&&!sq);lastC=null;$('crwin').disabled=true;
+    $('cr-cc-sq-note').hidden=!(cc&&!sq);$('cr-toreg').disabled=s.length!==2;$('cr-toreg-n').hidden=s.length===2;lastC=null;$('crwin').disabled=true;
     if(s.length<2){o.innerHTML='<p class="small" role="status">Select at least two columns.</p>';return;}
     let title,cap,html,g,concl=[];
     if(s.length===2){
@@ -4233,7 +4305,7 @@ function discCustomCalc(pairs,mode,a,b,d){
       const xi=+$('cr-xv').value,yi=s.find(i=>i!==xi),P2=pairs(xi,yi),t2=stats(P2);
       const S=scatter(P2,t2,{line:false,res:false,pred:null,d,xn:names[xi],yn:names[yi]});
       lastCG={title:'Scatterplot: '+names[yi]+' vs '+names[xi],svg:S.svg,hot:S.hot,sc:scPts(S.svg,P2,xi,yi),cap:`Explanatory variable (x): ${names[xi]}; response variable (y): ${names[yi]}; n = ${t2.n}; r = ${t2.r.toFixed(d)}`};
-      gr.innerHTML=`<div class="rgiw" style="position:relative">${S.svg}<div class="tip" hidden></div></div><div class="row"><button id="cr-win2">Open graph in a new window</button></div><p class="small">Hover over a point to see its values.</p>`;
+      gr.innerHTML=`<div class="rgiw" style="position:relative">${S.svg}<div class="tip" hidden></div></div><div class="row"><button id="cr-win2">Open graph in a new window</button><button class="cr-toreg" id="cr-toreg2">Open these columns in the regression menu</button></div><p class="small">Hover over a point to see its values.</p>`;
       const iw=gr.querySelector('.rgiw'),sv=iw.querySelector('svg'),tip=iw.querySelector('.tip');
       const show=e=>{
         const r=sv.getBoundingClientRect(),px=(e.clientX-r.left)/r.width*GW,py=(e.clientY-r.top)/r.height*GH;
@@ -4255,6 +4327,17 @@ function discCustomCalc(pairs,mode,a,b,d){
   };
   csec.addEventListener('click',async e=>{
     if(e.target.id==='cr-win2'&&lastCG){const prev=GS;GS=SCHEMES.purple;try{const cv=await pngCanvas(lastCG);GS=prev;makePop(lastCG,cv);}catch(err){GS=prev;}}
+  });
+  csec.addEventListener('click',e=>{
+    const b=e.target.closest&&e.target.closest('.cr-toreg');if(!b||b.disabled)return;
+    const s=[...crSel].sort((a,c)=>a-c);if(s.length!==2)return;
+    const fromSp=b.id==='cr-toreg2',xi=(!$('cr-xrow').hidden&&$('cr-sp').checked)?+$('cr-xv').value:s[0],yi=s.find(i=>i!==xi);
+    const dec=$('cr-dec').value,al=$('cr-al').value;
+    const nav=document.querySelector('.dd button[data-sec="d-reg"]');if(!nav)return;nav.click();
+    $('rg-x').value=String(xi);$('rg-y').value=String(yi);$('rg-dec').value=dec;$('rg-al').value=al;
+    if(fromSp)$('rg-sc').checked=true;
+    $('rg-y').dispatchEvent(new Event('change',{bubbles:true}));
+    try{rsec.scrollIntoView({block:'nearest'});}catch(err){}
   });
   csec.addEventListener('change',e=>{const i=e.target.dataset&&e.target.dataset.i;if(i!==undefined&&i!==''){e.target.checked?crSel.add(+i):crSel.delete(+i);}runCr();});
 
