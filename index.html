@@ -1378,7 +1378,7 @@ async function pngCanvas(g){
   }
   x.restore();
   x.fillStyle='#241a3a';if(g.big){x.textAlign='center';eqL.forEach(([t,b],i)=>{x.font=(b?'700 24px':'500 20px')+' Arial,sans-serif';x.fillText(t,fw/2,44+PH+fh+28+i*30);});x.textAlign='left';}else eqL.forEach(([t,b],i)=>{x.font=(b?'600 16px':'15px')+' Arial,sans-serif';x.fillText(t,16,44+PH+fh+22+i*22);});
-  x.font='13px Arial,sans-serif';x.fillStyle='#6b5f86';cap.forEach((l,i)=>x.fillText(l,16,44+PH+fh+eh+18+i*18));
+  x.font='13px Arial,sans-serif';x.fillStyle='#6b5f86';x.textAlign=g.big?'center':'left';cap.forEach((l,i)=>x.fillText(l,g.big?fw/2:16,44+PH+fh+eh+18+i*18));x.textAlign='left';
   return cv;
 }
 /* save a file: the host's download capability when present, otherwise an ordinary browser download */
