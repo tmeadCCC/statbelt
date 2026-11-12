@@ -147,6 +147,7 @@ table.ct{width:100%;margin-top:8px}
 .pb0{fill:var(--acc);fill-opacity:.3;stroke:var(--acc);stroke-width:2}
 .pb1{fill:var(--acc);stroke:var(--paper);stroke-width:1}
 .nc{fill:none;stroke:var(--ink);stroke-width:2}.ns{fill:var(--acc);fill-opacity:.55;stroke:none}.nz{stroke:#b03a2e;stroke-width:2;fill:none}.nzt{fill:#b03a2e;font-size:15px;font-weight:700}.sha{fill:var(--ink);font-size:15px;font-weight:600;font-family:inherit}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .nz{stroke:#ff8f84}:root:not([data-theme="light"]) .nzt{fill:#ff8f84}}:root[data-theme="dark"] .nz{stroke:#ff8f84}:root[data-theme="dark"] .nzt{fill:#ff8f84}
 .fcap{margin-top:4px}
 .fcap p{margin:3px 0}
 .fcap .sym{font-weight:600;font-size:15px}
@@ -169,6 +170,16 @@ table.ct{width:100%;margin-top:8px}
 .dtab input{width:130px;font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:5px;background:var(--paper);color:var(--ink)}
 .iw{position:relative}
 .pop.mini{resize:none;width:auto!important;min-width:0}
+.pop.min{display:none}
+.pop .mn{padding:2px 10px;font-size:18px;line-height:1.2;margin-right:4px}
+#poptray{position:fixed;left:8px;right:8px;bottom:8px;z-index:9000;display:flex;gap:8px;align-items:center;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:5px 8px;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+#poptray[hidden]{display:none}
+#poptray .tl{font-size:12px;font-weight:600;color:var(--mute);white-space:nowrap}
+#poptray .tc{display:flex;gap:6px;overflow-x:auto;flex:1;min-width:0}
+#poptray .chip{white-space:nowrap;max-width:210px;overflow:hidden;text-overflow:ellipsis;padding:4px 10px;font-size:13px;flex:none}
+#poptray .chip.isMin{font-style:italic;border-style:dashed}
+#poptray .chip.act{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+#poptray .tb{padding:4px 10px;font-size:13px;white-space:nowrap;flex:none}
 .pop.mini .pb,.pop.mini .pf{display:none}
 .pop.mini .ph span::after{content:" (editing)";font-weight:400;color:var(--mute)}
 .pop:not(.mini) .rs{display:none}
@@ -323,7 +334,7 @@ details.m>summary{display:none}
     </div></div>
   <div class="mi"><button class="mb" aria-haspopup="true" aria-expanded="false">Textbook</button>
     <div class="dd">
-      <a id="textbook" href="https://sites.google.com/view/intro-to-statistics-with-tech/home" target="_blank" rel="noopener noreferrer">Intro to Statistics with Tech (textbook home page)</a>
+      <a id="textbook" href="https://statswithtech.org/" target="_blank" rel="noopener noreferrer">Intro to Statistics with Tech (textbook home page)</a>
     </div></div>
 </nav>
 
@@ -332,11 +343,14 @@ details.m>summary{display:none}
     <h2>Data</h2>
     <div class="bar">
       <select id="example" aria-label="Sample Data" style="width:142px"><option value="">Sample Data</option><option value="0">Superhero Films</option><option value="1">NBA 2014-2015</option><option value="2">Unemployment Rates 1990-2020</option><option value="3">U.S. Presidents Age at Inauguration</option><option value="4">U.S. Poverty Rates by State (and DC)</option><option value="5">Titanic Survival</option></select>
+      <select id="tbdata" aria-label="Textbook Data" style="width:150px"><option value="">Textbook Data</option></select>
+      <button id="pastebtn">Paste data</button>
       <button id="clear">Clear all data</button>
       <button id="more">Add 10 rows</button>
       <button id="importbtn">Import CSV or Excel file…</button>
     </div>
     <div class="scroll"><table id="grid"></table></div>
+    <div id="kbhint" hidden style="padding:6px 14px 0;font-size:13px;color:var(--mute)">Need a minus sign or letters in this column? <button id="kbfull" type="button" style="padding:3px 9px;font-size:13px">Use full keyboard</button></div>
     <div id="msg" role="status"></div>
   </section>
 
@@ -474,6 +488,7 @@ details.m>summary{display:none}
         <div class="row"><label class="t" for="hw">Bin width</label><input id="hw" type="number" step="any" min="0"></div>
         <div class="row" style="margin-top:6px"><label class="t" for="hy">Bar height</label><select id="hy"><option value="f">Frequency</option><option value="r">Relative frequency</option></select></div>
         <div class="checks" style="margin-top:6px"><label><input type="checkbox" id="hvals">Show values above the bars</label></div>
+        <div class="checks" id="hstackrow" style="margin-top:6px" hidden><label><input type="checkbox" id="hstack">Stack the histograms on one horizontal axis</label></div>
         <div class="checks" style="margin-top:6px"><label><input type="checkbox" id="hmean">Show mean (x̄) in green</label><label><input type="checkbox" id="hmed">Show median (M) in red</label></div>
         <h3 style="margin:12px 0 6px;font-size:13px">Highlight data values</h3>
         <div class="row"><button id="hlclear">Clear selection</button></div>
@@ -589,9 +604,24 @@ function buildHead(){
     msg.textContent=`Pasted ${nc} column${nc>1?'s':''} with headers and ${body.length-rowCut} rows, starting at ${names[c0]}.`+(hdr.length>nc?' Extra columns past '+names[COLS-1]+' were not added.':'')+(rowCut?` The sheet holds at most ${MAX_ROWS.toLocaleString()} rows.`:'');
   }));
 }
+/* ---------- phone keyboards: number pad for columns of positive numbers, full keyboard otherwise ---------- */
+const kbForce=Array(COLS).fill(false), kbLast=Array(COLS).fill('');
+function kbMode(c){
+  if(kbForce[c]) return 'text';
+  let any=false;
+  for(let r=0;r<data.length;r++){ const v=(data[r][c]||'').trim(); if(v==='') continue; any=true;
+    if(!isFinite(Number(v))||v.startsWith('-')) return 'text'; }
+  return any?'decimal':'text';
+}
+function kbAttr(c){ try{ return kbMode(c)==='decimal'?' inputmode="decimal"':''; }catch(e){ return ''; } }
+function kbApply(c){
+  const m=kbMode(c); if(m===kbLast[c]) return; kbLast[c]=m;
+  grid.querySelectorAll(`tbody input[data-c="${c}"]`).forEach(i=>{ if(m==='decimal') i.setAttribute('inputmode','decimal'); else i.removeAttribute('inputmode'); });
+}
+function kbApplyAll(){ for(let c=0;c<COLS;c++){ kbLast[c]=''; kbApply(c); } }
 function rowHTML(r){
   let s = `<tr><th class="rn">${r+1}</th>`;
-  for(let c=0;c<COLS;c++) s += `<td><input data-r="${r}" data-c="${c}" inputmode="decimal" autocomplete="off" aria-label="Row ${r+1}, ${names[c]}"></td>`;
+  for(let c=0;c<COLS;c++) s += `<td><input data-r="${r}" data-c="${c}"${kbAttr(c)} autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Row ${r+1}, ${names[c]}"></td>`;
   return s + '</tr>';
 }
 function ensureRows(n){
@@ -612,12 +642,13 @@ function setCell(r,c,v){
 function refreshAll(){
   ensureRows(data.length);
   for(let r=0;r<data.length;r++) for(let c=0;c<COLS;c++) setCell(r,c,data[r][c]);
+  kbForce.fill(false); kbApplyAll();
 }
 grid.addEventListener('input',e=>{
   const t = e.target; if(t.dataset.r===undefined) return;
   const r=+t.dataset.r, c=+t.dataset.c;
   data[r][c] = t.value;
-  
+  kbApply(c);
   if(r >= data.length-2) ensureRows(data.length+10);
   update();
 });
@@ -719,6 +750,12 @@ document.addEventListener('mousemove',e=>{
 });
 document.addEventListener('mouseup',()=>{ if(dragging){ dragging=false; grid.classList.remove('dragging'); selMsg(); } });
 document.addEventListener('mousedown',e=>{ if(!grid.contains(e.target)) clearSel(); });
+(function(){
+  const touch=window.matchMedia&&matchMedia('(pointer:coarse)').matches, hint=$('kbhint'); let lastCell=null;
+  grid.addEventListener('focusin',e=>{ const t=e.target; if(!touch||!t.dataset||t.dataset.c===undefined) return; lastCell=t; hint.hidden=t.getAttribute('inputmode')!=='decimal'; });
+  $('kbfull').addEventListener('pointerdown',e=>e.preventDefault());
+  $('kbfull').onclick=()=>{ if(!lastCell) return; const c=+lastCell.dataset.c; kbForce[c]=true; kbApply(c); hint.hidden=true; lastCell.blur(); setTimeout(()=>lastCell.focus(),30); };
+})();
 grid.addEventListener('focusin',e=>{ const t=e.target; if(t.dataset&&t.dataset.r!==undefined){ if(!dragging) clearSel(); anchor=[+t.dataset.r,+t.dataset.c]; } });
 function clearSelCells(){
   const b=selBox(); if(!b) return;
@@ -820,6 +857,49 @@ $('example').onchange=()=>{
   msg.textContent=sup?'Example data loaded: '+EXD.length+' superhero films from DC and Marvel.':`Example data loaded: ${S.d} (${rows.length} rows).`;
   $('example').value='';$('example').blur();
 };
+
+/* ---------- textbook data (Introduction to Statistics with Technology) ---------- */
+/* TEXTBOOK-DATA-START (generated by statsbook/data/build_statbelt_data.py; do not edit by hand) */
+const TBSETS=[{"id":"pizza","t":"Favorite pizza","s":["2.1"],"n":["Favorite Pizza"],"r":[["Pepperoni"],["Pepperoni"],["Cheese"],["Veggie"],["Pepperoni"],["Hawaiian"],["Other"],["Cheese"],["Cheese"],["Veggie"],["Pepperoni"],["Other"],["Veggie"],["Pepperoni"],["Cheese"],["Hawaiian"],["Pepperoni"],["Pepperoni"],["Hawaiian"],["Other"],["Hawaiian"],["Pepperoni"],["Hawaiian"],["Other"],["Other"],["Other"],["Cheese"],["Veggie"],["Pepperoni"],["Pepperoni"],["Other"],["Pepperoni"],["Veggie"],["Other"],["Other"],["Hawaiian"],["Other"],["Pepperoni"],["Veggie"],["Hawaiian"]]},{"id":"vaccination","t":"Vaccination status and ethnicity","s":["2.1","8.2"],"n":["Status","Ethnicity"],"r":[["Vaccinated","White"],["Unvaccinated","White"],["Unvaccinated","White"],["Unvaccinated","Black"],["Vaccinated","White"],["Vaccinated","White"],["Unvaccinated","Other"],["Vaccinated","White"],["Vaccinated","White"],["Unvaccinated","Hispanic"],["Vaccinated","White"],["Vaccinated","Hispanic"],["Unvaccinated","Hispanic"],["Unvaccinated","Hispanic"],["Vaccinated","White"],["Vaccinated","Other"],["Vaccinated","Asian"],["Vaccinated","White"],["Vaccinated","Other"],["Vaccinated","Hispanic"],["Unvaccinated","Hispanic"],["Vaccinated","Hispanic"],["Unvaccinated","White"],["Vaccinated","White"],["Vaccinated","White"],["Vaccinated","White"],["Unvaccinated","White"],["Vaccinated","Hispanic"],["Vaccinated","Hispanic"],["Unvaccinated","Black"],["Unvaccinated","Other"],["Unvaccinated","Hispanic"],["Unvaccinated","White"],["Vaccinated","White"],["Vaccinated","Black"],["Vaccinated","White"],["Unvaccinated","Other"],["Vaccinated","White"],["Vaccinated","Other"],["Unvaccinated","Asian"],["Unvaccinated","Black"],["Vaccinated","White"],["Unvaccinated","White"],["Vaccinated","White"],["Vaccinated","Asian"],["Vaccinated","Asian"],["Vaccinated","Black"],["Vaccinated","Asian"],["Vaccinated","Hispanic"],["Unvaccinated","Other"],["Vaccinated","Hispanic"],["Vaccinated","Hispanic"],["Vaccinated","Hispanic"],["Vaccinated","Black"],["Vaccinated","Asian"],["Vaccinated","White"],["Vaccinated","Hispanic"],["Vaccinated","White"],["Vaccinated","Hispanic"],["Unvaccinated","Hispanic"],["Vaccinated","Hispanic"],["Vaccinated","White"],["Unvaccinated","Asian"],["Vaccinated","Asian"],["Vaccinated","White"],["Unvaccinated","Black"],["Vaccinated","Black"],["Unvaccinated","Hispanic"],["Vaccinated","Other"],["Vaccinated","Hispanic"],["Vaccinated","White"],["Unvaccinated","Black"],["Unvaccinated","Other"],["Vaccinated","White"],["Unvaccinated","White"],["Unvaccinated","White"],["Vaccinated","White"],["Unvaccinated","Black"],["Unvaccinated","Hispanic"],["Unvaccinated","White"],["Vaccinated","Black"],["Unvaccinated","White"],["Vaccinated","Hispanic"],["Vaccinated","Hispanic"],["Vaccinated","Other"],["Vaccinated","White"],["Vaccinated","Hispanic"],["Vaccinated","White"],["Vaccinated","White"],["Vaccinated","White"],["Vaccinated","Hispanic"],["Unvaccinated","Other"],["Vaccinated","White"],["Vaccinated","Hispanic"],["Vaccinated","White"],["Vaccinated","White"],["Vaccinated","White"],["Vaccinated","White"],["Vaccinated","Hispanic"],["Unvaccinated","White"],["Vaccinated","Hispanic"],["Unvaccinated","White"],["Unvaccinated","Hispanic"],["Unvaccinated","Asian"],["Vaccinated","Hispanic"],["Vaccinated","White"],["Vaccinated","Hispanic"],["Vaccinated","Asian"],["Vaccinated","Hispanic"],["Vaccinated","Hispanic"],["Unvaccinated","White"],["Vaccinated","White"],["Unvaccinated","Hispanic"],["Unvaccinated","Hispanic"],["Vaccinated","Hispanic"],["Vaccinated","Hispanic"],["Vaccinated","Black"],["Unvaccinated","White"],["Vaccinated","Hispanic"],["Vaccinated","Asian"],["Vaccinated","Black"],["Unvaccinated","White"],["Vaccinated","Black"],["Vaccinated","Hispanic"],["Vaccinated","Black"],["Unvaccinated","Hispanic"],["Unvaccinated","Black"],["Vaccinated","Black"],["Vaccinated","Hispanic"],["Vaccinated","Hispanic"],["Vaccinated","Asian"],["Vaccinated","Hispanic"],["Unvaccinated","White"],["Unvaccinated","Hispanic"],["Unvaccinated","Black"],["Vaccinated","White"],["Vaccinated","White"],["Vaccinated","Asian"],["Unvaccinated","Black"],["Vaccinated","Asian"],["Unvaccinated","White"],["Vaccinated","Hispanic"],["Vaccinated","Black"],["Vaccinated","Asian"],["Vaccinated","Hispanic"],["Vaccinated","Hispanic"],["Unvaccinated","Hispanic"],["Vaccinated","Asian"]]},{"id":"presidents","t":"Presidents’ ages at inauguration","s":["2.2","3.1","3.2","3.4"],"n":["Name","Age at inauguration","Year"],"r":[["T Roosevelt","42","1901"],["Kennedy","43","1961"],["Grant","46","1869"],["Clinton","46","1993"],["Cleveland","47","1885"],["Barack Obama","47","2008"],["Pierce","48","1853"],["Polk","49","1845"],["Garfield","49","1881"],["Fillmore","50","1850"],["Tyler","51","1841"],["Arthur","51","1881"],["Taft","51","1909"],["Coolidge","51","1923"],["FD Roosevelt","51","1933"],["Lincoln","52","1861"],["Carter","52","1977"],["Van Buren","54","1837"],["Hayes","54","1877"],["McKinley","54","1897"],["Hoover","54","1929"],["George W. Bush","54","2001"],["B Harrison","55","1889"],["Cleveland","55","1893"],["Harding","55","1921"],["LB Johnson","55","1963"],["A Johnson","56","1865"],["Wilson","56","1913"],["Nixon","56","1969"],["Washington","57","1789"],["Jefferson","57","1801"],["Madison","57","1809"],["JQ Adams","57","1825"],["Monroe","58","1817"],["Truman","60","1945"],["J. Adams","61","1797"],["Jackson","61","1829"],["Eisenhower","61","1953"],["Ford","61","1974"],["Taylor","64","1849"],["George H. Bush","64","1989"],["Buchanan","65","1857"],["WH Harrison","68","1841"],["Reagan","69","1981"],["Donald Trump","70","2016"],["Joe Biden","78","2020"]]},{"id":"poverty","t":"Average poverty rates by state, 2016–2018","s":["2.2","3.1","3.2","3.3","3.4"],"n":["State","Average Poverty rate 2016-2018"],"r":[["Alabama","16"],["Alaska","12.2"],["Arizona","14.4"],["Arkansas","15.5"],["California","12.5"],["Colorado","8.9"],["Connecticut","9.9"],["Delaware","9.6"],["District of Columbia","14.9"],["Florida","13.6"],["Georgia","14.7"],["Hawaii","9.5"],["Idaho","11.3"],["Illinois","10.9"],["Indiana","11.8"],["Iowa","9.2"],["Kansas","10.8"],["Kentucky","15.3"],["Louisiana","19.8"],["Maine","12.6"],["Maryland","7.1"],["Massachusetts","9.8"],["Michigan","11"],["Minnesota","8.7"],["Mississippi","19.8"],["Missouri","11.9"],["Montana","10.4"],["Nebraska","10.4"],["Nevada","12.2"],["New Hampshire","6.4"],["New Jersey","9.1"],["New Mexico","18.7"],["New York","11.8"],["North Carolina","14.1"],["North Dakota","10.9"],["Ohio","12.8"],["Oklahoma","14"],["Oregon","10.6"],["Pennsylvania","11.5"],["Rhode Island","10.3"],["South Carolina","14.1"],["South Dakota","11.8"],["Tennessee","12.6"],["Texas","13.7"],["Utah","7.9"],["Vermont","9.6"],["Virginia","10.7"],["Washington","10.3"],["West Virginia","17.2"],["Wisconsin","9.5"],["Wyoming","11.4"]]},{"id":"juneteenth","t":"States observing Juneteenth","s":["2.2"],"n":["Year","Number of States Observing Juneteenth","Paid Holiday"],"r":[["1980","1","1"],["1981","1","1"],["1982","1","1"],["1983","1","1"],["1984","1","1"],["1985","1","1"],["1986","1","1"],["1987","1","1"],["1988","1","1"],["1989","1","1"],["1990","1","1"],["1991","2","1"],["1992","2","1"],["1993","2","1"],["1994","3","1"],["1995","3","1"],["1996","4","1"],["1997","4","1"],["1998","4","1"],["1999","4","1"],["2000","5","1"],["2001","8","1"],["2002","9","1"],["2003","16","1"],["2004","19","1"],["2005","22","1"],["2006","24","1"],["2007","31","1"],["2008","33","1"],["2009","35","1"],["2010","37","1"],["2011","41","1"],["2012","42","1"],["2013","42","1"],["2014","43","1"],["2015","43","1"],["2016","45","1"],["2017","46","1"],["2018","46","1"],["2019","48","1"],["2020","49","3"],["2021","51","10"],["2022","51","24"],["2023","51","25"]]},{"id":"exam-scores","t":"Fall and Spring 2019 exam scores","s":["3.2"],"n":["Test 1 Fall '19","Test 1 Spring '19"],"r":[["98","100"],["87","89"],["93","86"],["98","85"],["92","91"],["98","82"],["96","91"],["72","97"],["78","85"],["63","98"],["88","84"],["89","76"],["78","100"],["95","86"],["86","100"],["83","76"],["59","84"],["95","89"],["100","100"],["86","85"],["97","95"],["94","78"],["41","91"],["78","82"],["94","89"],["93","94"],["85","94"],["100","73"],["94","94"],["63","78"],["93","96"],["94","88"],["100","94"],["84","87"],["87","95"],["60","90"],["70","100"],["91","79"],["67","97"],["65","95"],["73","100"],["74","92"],["90","97"],["93","76"],["79","85"]]},{"id":"unemployment","t":"Unemployment rates, Black and White Americans","s":["3.3","3.4"],"n":["Year","Black","White"],"r":[["1990","11.4","4.8"],["1991","12.5","6.1"],["1992","14.2","6.6"],["1993","13","6.1"],["1994","11.5","5.3"],["1995","10.4","4.9"],["1996","10.5","4.7"],["1997","10","4.2"],["1998","8.9","3.9"],["1999","8","3.7"],["2000","7.6","3.5"],["2001","8.6","4.2"],["2002","10.2","5.1"],["2003","10.8","5.2"],["2004","10.4","4.8"],["2005","10","4.4"],["2006","8.9","4"],["2007","8.3","4.1"],["2008","10.1","5.2"],["2009","14.8","8.5"],["2010","16","8.7"],["2011","15.8","7.9"],["2012","13.8","7.2"],["2013","13.1","6.5"],["2014","11.3","5.3"],["2015","9.6","4.6"],["2016","8.4","4.3"],["2017","7.5","3.8"],["2018","6.5","3.5"],["2019","6.1","3.3"]]},{"id":"rotten-tomatoes","t":"Superhero films: box office and Rotten Tomatoes","s":["3.4"],"n":["Company","Film","Release","Adjusted","Worldwide","Domestic","Foreign","Rotten Tomatoes"],"r":[["DC","Batman: The Movie","1966","22.060185","3","3","","78"],["DC","Superman","1978","1097.039","300.218018","134.218018","166","94"],["DC","Superman II","1980","312.806365","108.185706","108.185706","","86"],["DC","Superman III","1983","143.405983","59.950623","59.950623","","26"],["DC","Supergirl","1984","32.782737","14.296438","14.296438","","10"],["Marvel","Howard the Duck","1986","82.524005","37.962774","16.295774","21.667","15"],["DC","Superman IV: The Quest for Peace","1987","32.88735","15.68102","","","11"],["DC","Batman","1989","790.35388","411.348924","251.188924","160.16","72"],["Marvel","The Punisher","1989","1.02488","0.533411","","0.533411","28"],["DC","The Return of Swamp Thing","1989","0.370471","0.192816","0.192816","","44"],["Marvel","Captain America","1990","0.018544","0.010173","","0.010173","7"],["DC","Batman Returns","1992","453.103534","266.822354","162.831698","103.990656","79"],["DC","Batman Forever","1995","526.102812","336.529144","184.031112","152.498032","39"],["DC","Batman & Robin","1997","353.600292","238.207122","107.325195","130.881927","11"],["DC","Steel","1997","2.539807","1.710972","1.710972","","12"],["Marvel","Blade","1998","191.745252","131.18353","70.087718","61.095812","54"],["Marvel","X-Men","2000","410.005182","296.339527","157.299717","139.03981","81"],["Marvel","Spider-Man","2002","1088.227139","821.708551","403.706375","418.002176","90"],["Marvel","Blade II","2002","205.287049","155.010032","82.348319","72.661713","57"],["Marvel","X2: X-Men United","2003","527.919981","407.711549","214.949694","192.761855","85"],["Marvel","Hulk","2003","317.701817","245.36048","132.177234","113.183246","62"],["DC","League of Extraordinary Gentlemen","2003","232.119211","179.265204","66.465204","112.8","17"],["Marvel","Daredevil","2003","232.008521","179.179718","102.543518","76.6362","44"],["Marvel","Spider-Man 2","2004","988.524779","783.766341","373.585825","410.180516","93"],["Marvel","Blade: Trinity","2004","162.581808","128.905366","52.411906","76.49346","26"],["DC","Catwoman","2004","103.551571","82.102379","40.202379","41.9","9"],["Marvel","The Punisher","2004","68.990471","54.700105","33.810189","20.889916","29"],["DC","Batman Begins","2005","456.516123","374.218673","206.852432","167.366241","84"],["Marvel","Fantastic Four","2005","403.280174","330.579719","154.69608","175.883639","27"],["DC","Constantine","2005","281.660453","230.884728","75.976178","154.90855","46"],["DC","V for Vendetta","2005","161.652607","132.511035","70.511035","62","73"],["Marvel","Elektra","2005","69.146867","56.681566","24.409722","32.271844","11"],["Marvel","X-Men: The Last Stand","2006","542.869117","459.359555","234.362462","224.997093","57"],["DC","Superman Returns","2006","462.178046","391.081192","200.081192","191","75"],["Marvel","Spider-Man 3","2007","1023.671832","890.871626","336.530303","554.341323","63"],["Marvel","Fantastic Four: Rise of the Silver Surfer","2007","332.135455","289.047763","131.921738","157.126025","37"],["Marvel","Ghost Rider","2007","262.835905","228.738393","115.802596","112.935797","26"],["DC","The Dark Knight","2008","1111.624312","1004.558444","534.858444","469.7","94"],["Marvel","Iron Man","2008","647.542108","585.174222","318.412101","266.762121","94"],["Marvel","The Incredible Hulk","2008","291.503667","263.427551","134.806913","128.620638","67"],["DC","The Spirit","2008","43.191298","39.031337","19.806188","19.225149","14"],["Marvel","Punisher: War Zone","2008","11.176498","10.100036","8.050977","2.049059","29"],["DC","Watchmen","2009","205.735853","185.258983","107.509799","77.749184","64"],["Marvel","Iron Man 2","2010","681.718448","623.933331","312.433331","311.5","73"],["Marvel","Kick-Ass","2010","105.097366","96.188903","48.071303","48.1176","76"],["DC","The Losers","2010","32.100704","29.379723","23.591432","5.788291","48"],["DC","Jonah Hex","2010","11.913114","10.903312","10.547117","0.356195","12"],["Marvel","Thor","2011","475.915989","449.326618","181.030624","268.295994","77"],["Marvel","Captain America: The First Avenger","2011","392.498627","370.569774","176.654505","193.915269","80"],["Marvel","X-Men: First Class","2011","374.5502","353.624124","146.408305","207.215819","86"],["DC","Green Lantern","2011","232.861094","219.851172","116.601172","103.25","26"],["Marvel","Avengers","2012","1575.847963","1518.59491","623.35791","895.237","91"],["DC","The Dark Knight Rises","2012","1125.323899","1084.439099","448.139099","636.3","87"],["Marvel","The Amazing Spider-Man","2012","786.50566","757.930663","262.030663","495.9","73"],["Marvel","Ghost Rider: Spirit of Vengeance","2012","137.561767","132.56393","51.774002","80.789928","18"],["Marvel","Iron Man 3","2013","1243.055923","1215.439994","409.013994","806.426","79"],["DC","Man of Steel","2013","683.224134","668.045518","291.045518","377","56"],["Marvel","Thor: The Dark World","2013","659.433213","644.78314","206.36214","438.421","66"],["Marvel","Kick-Ass 2","2013","62.177326","60.795985","28.795985","32","32"],["Marvel","X-Men: Days of Future Past","2014","744.047433","744.047433","232.485","511.562433","90"],["Marvel","Captain America: The Winter Soldier","2014","714.0259","714.0259","259.7089","454.317","90"],["Marvel","The Amazing Spider-Man 2","2014","708.219235","708.219235","202.778224","505.441011","52"],["Marvel","Guardians of the Galaxy","2014","418.681","418.681","222.281","196.4","91"],["DC","Batman v Superman","2016","873.634","873.634","330.36","543.275","28"],["DC","Suicide Squad","2016","746.847","746.847","325.1","421.747","27"],["DC","Wonder Woman","2017","821.847","821.847","412.563","409.284","93"],["DC","Justice League","2017","657.924","657.924","229.024","428.9","40"],["DC","Aquaman","2018","1148.162","1148.162","335.062","813.1","65"],["DC","Shazam","2019","364.572","364.572","140.372","224.2","90"],["Marvel","Avengers: Age of Ultron","2015","1402.806","1402.806","459.006","943.8","75"],["Marvel","Ant-Man","2015","519.312","519.312","180.202","339.11","83"],["Marvel","Captain America: Civil War","2016","1153.296","1153.296","408.084","745.212","91"],["Marvel","Doctor Strange","2016","677.718","677.718","232.642","445.076","89"],["Marvel","Guardians of the Galaxy 2","2017","863.756","863.756","389.813","473.943","84"],["Marvel","Spider-Man: Homecoming","2017","880.167","880.167","334.201","545.966","92"],["Marvel","Thor: Ragnarok","2017","853.977","853.977","315.058","538.919","93"],["Marvel","Black Panther","2018","1346.913","1346.913","700.06","646.854","97"],["Marvel","Avengers: Infinity War","2018","2048.36","2048.36","678.815","1369.544","85"],["Marvel","Ant-Man and the Wasp","2018","622.674","622.674","216.649","406.025","88"],["Marvel","Captain Marvel","2019","1128.275","1128.275","426.83","701.445","78"],["Marvel","Avengers: Endgame","2019","2797.801","2797.801","858.373","1939.428","94"],["Marvel","Spider-Man: Far from Home","2019","1131.928","1131.928","390.532","741.396","91"],["Marvel","Fantastic Four(2015)","2015","167.883","167.883","56.118","111.765","9"],["Marvel","Deadpool","2016","783.113","783.113","363.071","420.042","85"],["Marvel","X-Men: Apocalypse","2016","543.934","543.934","155.442","388.492","47"],["Marvel","Logan","2017","616.796","616.796","226.277","390.519","93"],["Marvel","Deadpool 2","2018","785.047","785.047","324.592","460.455","84"],["Marvel","Venom","2018","855.014","855.014","213.516","641.498","29"],["Marvel","Dark Phoenix","2019","252.443","252.443","65.846","186.597","23"],["Marvel","Spider-Man: Into the Spider-verse","2019","375.54","375.54","190.241","185.3","97"],["Marvel","Big Hero 6","2014","657.823","657.823","222.528","435.3","89"],["DC","The Lego Batman Movie","2017","312","312","175.8","136.2","90"],["DC","Joker","2019","1070","1070","334.7","735.7","69"]]},{"id":"protein-fat","t":"Protein vs fat","s":["4.1","4.2","4.3"],"n":["Total Fat","Protein"],"r":[["8","12"],["11","15"],["27","24"],["26","30"],["40","39"],["43","48"],["15","11"],["22","24"],["9","28"],["12","9"],["11","2"],["8","11"],["12","13"],["38","26"],["49","33"],["54","43"]]},{"id":"mpg-weight","t":"Miles per gallon vs weight","s":["4.1","4.2","4.3"],"n":["Car","Weight","Miles Per Gallon"],"r":[["69 Chevy truck","5200","9"],["Chevy Camaro","3339","19"],["Dodge Charger","3964","19"],["Dodge Neon","2580","27"],["Ford Escape","3298","27"],["Ford F-150","4705","17"],["Ford Mustang","3526","22"],["Honda CR-V","3337","28"],["Honda Civic","2877","30"],["Honda Pilot","4030","20"],["Hyundai Tucson","3329","26"],["Mazda 6","3179","26"],["Subaru Outback","3641","26"],["Toyota Rav 4","3370","27"],["Toyota Tacoma","3915","20"]]},{"id":"hdl-heart-rate","t":"HDL level vs heart rate","s":["4.1","4.2","4.3"],"n":["Heart Rate","HDL Cholesterol Level"],"r":[["80","52"],["70","48"],["80","35"],["71","55"],["72","53"],["78","54"],["78","46"],["74","56"],["67","53"],["64","46"],["78","61"],["82","69"],["67","60"],["66","62"],["64","63"],["71","66"],["72","43"],["70","30"],["68","40"],["76","62"]]},{"id":"gpa","t":"High school and college GPA","s":["4.4","8.3"],"n":["HS GPA","College GPA"],"r":[["3.87","3.89"],["4","3.9"],["2.87","2"],["2.99","3"],["3.22","2.83"],["3.32","2.67"],["2.67","2.38"],["4","3.83"],["3.54","3.5"],["2.63","2.6"],["2.62","2.54"],["4","3"],["2.26","1.92"],["3.27","3.1"],["3.11","2.9"],["1.83","2"],["3.84","3.43"],["4","4"],["3.43","3"],["3.31","3.3"],["2.97","3.2"],["4","3.7"],["2.12","2.9"],["3.03","3"],["3.72","2.7"],["2.33","3.05"],["2.93","2.33"],["3.66","3"],["3.49","2.4"],["3.44","3"],["2.49","2.25"],["2.7","2.9"],["3.95","3.33"],["3.72","3.9"],["4","3.9"],["4","3.54"],["2.1","2.04"],["2.48","2.7"],["3.74","4.06"],["1.49","2.23"],["1.89","2"],["3.31","3"],["4","3.7"],["3.75","2.64"],["3.5","3"],["2.07","2.67"],["3.42","3.2"],["4","3.92"]]},{"id":"three-pointers","t":"Steph Curry 3-pointers","s":["6.1"],"n":["3-pointers","Probability"],"r":[["1","0.062"],["2","0.083"],["3","0.178"],["4","0.135"],["5","0.167"],["6","0.105"],["7","0.104"],["8","0.094"],["9","0.031"],["10","0.021"],["11","0.01"],["12","0.01"]]},{"id":"dice","t":"Dice data: 100 samples of 10 rolls","s":["7.3"],"n":["Sample Number","One","Two","Three","Four","Five","Six","Sample Mean"],"r":[["1","0","2","4","2","2","0","3.4"],["2","3","1","1","0","1","4","3.7"],["3","1","2","1","3","2","1","3.6"],["4","2","1","0","4","3","0","3.5"],["5","1","2","2","1","2","2","3.7"],["6","2","2","3","1","1","1","3"],["7","1","1","2","0","2","4","4.3"],["8","4","2","1","2","0","1","2.5"],["9","0","3","2","1","4","0","3.6"],["10","0","2","2","4","1","1","3.7"],["11","3","1","1","2","1","2","3.3"],["12","3","3","2","1","0","1","2.5"],["13","1","3","0","3","1","2","3.6"],["14","2","1","2","1","2","2","3.6"],["15","0","2","4","0","1","3","3.9"],["16","2","1","2","1","2","2","3.6"],["17","1","1","1","1","3","3","4.3"],["18","1","0","2","4","2","1","3.9"],["19","3","2","1","1","1","2","3.1"],["20","1","1","4","0","1","3","3.8"],["21","1","1","2","5","0","1","3.5"],["22","0","3","0","1","4","2","4.2"],["23","1","3","2","0","1","3","3.6"],["24","2","3","3","0","1","1","2.8"],["25","1","1","1","3","2","2","4"],["26","5","0","2","1","1","1","2.6"],["27","4","1","1","1","2","1","2.9"],["28","1","1","2","4","2","0","3.5"],["29","0","1","3","3","1","2","4"],["30","1","4","2","0","2","1","3.1"],["31","3","0","2","2","1","2","3.4"],["32","1","1","1","3","1","3","4.1"],["33","1","0","2","2","4","1","4.1"],["34","2","0","0","3","4","1","4"],["35","1","5","1","1","2","0","2.8"],["36","1","1","0","4","2","2","4.1"],["37","1","2","2","0","2","3","3.9"],["38","2","1","2","1","0","4","3.8"],["39","0","2","1","3","3","1","4"],["40","3","0","2","1","3","1","3.4"],["41","1","1","2","3","2","1","3.7"],["42","1","2","2","2","2","1","3.5"],["43","2","1","3","1","2","1","3.3"],["44","3","2","1","2","2","0","2.8"],["45","3","0","1","1","2","3","3.8"],["46","2","3","0","3","0","2","3.2"],["47","1","4","2","2","0","1","2.9"],["48","1","2","2","1","2","2","3.7"],["49","0","2","4","2","0","2","3.6"],["50","0","3","2","1","1","3","3.9"],["51","1","1","1","3","1","3","4.1"],["52","2","1","2","2","2","1","3.4"],["53","3","1","1","2","2","1","3.2"],["54","0","1","3","2","1","3","4.2"],["55","2","2","1","1","3","1","3.4"],["56","1","2","3","2","1","1","3.3"],["57","5","0","4","1","0","0","2.1"],["58","2","0","5","1","1","1","3.2"],["59","0","2","0","2","0","6","4.8"],["60","1","4","2","1","1","1","3"],["61","2","1","0","1","1","5","4.3"],["62","3","1","2","3","0","1","2.9"],["63","2","3","0","1","2","2","3.4"],["64","2","3","3","0","0","2","2.9"],["65","1","1","1","4","3","0","3.7"],["66","2","0","1","2","4","1","3.9"],["67","0","4","2","2","2","0","3.2"],["68","2","1","3","1","1","2","3.4"],["69","0","1","4","2","1","2","3.9"],["70","1","5","0","1","1","2","3.2"],["71","1","2","2","1","1","3","3.8"],["72","2","3","1","1","3","0","3"],["73","1","1","1","4","3","0","3.7"],["74","2","3","0","1","1","3","3.5"],["75","1","1","1","5","1","1","3.7"],["76","2","3","2","2","0","1","2.8"],["77","1","0","2","5","1","1","3.8"],["78","3","2","2","1","0","2","2.9"],["79","3","2","0","2","2","1","3.1"],["80","3","3","1","1","1","1","2.7"],["81","1","2","1","2","3","1","3.7"],["82","5","0","1","0","3","1","2.9"],["83","1","2","3","0","3","1","3.5"],["84","1","2","2","1","3","1","3.6"],["85","0","1","2","3","3","1","4.1"],["86","3","4","0","1","1","1","2.6"],["87","3","0","1","4","1","1","3.3"],["88","1","3","3","0","2","1","3.2"],["89","3","0","1","3","0","3","3.6"],["90","3","3","1","1","2","0","2.6"],["91","3","1","2","2","1","1","3"],["92","3","3","0","1","2","1","2.9"],["93","0","0","1","5","4","0","4.3"],["94","4","3","2","1","0","0","2"],["95","2","0","3","2","1","2","3.6"],["96","1","1","1","1","2","4","4.4"],["97","3","1","3","0","0","3","3.2"],["98","2","0","4","3","0","1","3.2"],["99","1","2","2","1","2","2","3.7"],["100","1","4","1","0","3","1","3.3"]]},{"id":"positive-impact","t":"Simulated survey proportions","s":["7.4"],"n":["Sample Number","Number who select Positive Impact","Sample Proportion"],"r":[["1","2185","0.6593"],["2","2115","0.6382"],["3","2085","0.6291"],["4","2081","0.6279"],["5","2125","0.6412"],["6","2136","0.6445"],["7","2117","0.6388"],["8","2176","0.6566"],["9","2125","0.6412"],["10","2076","0.6264"],["11","2121","0.64"],["12","2153","0.6497"],["13","2093","0.6316"],["14","2150","0.6488"],["15","2153","0.6497"],["16","2137","0.6448"],["17","2104","0.6349"],["18","2091","0.631"],["19","2093","0.6316"],["20","2106","0.6355"],["21","2086","0.6295"],["22","2043","0.6165"],["23","2083","0.6285"],["24","2127","0.6418"],["25","2098","0.6331"],["26","2136","0.6445"],["27","2100","0.6337"],["28","2095","0.6322"],["29","2065","0.6231"],["30","2119","0.6394"],["31","2125","0.6412"],["32","2157","0.6509"],["33","2124","0.6409"],["34","2110","0.6367"],["35","2119","0.6394"],["36","2084","0.6288"],["37","2123","0.6406"],["38","2126","0.6415"],["39","2119","0.6394"],["40","2139","0.6454"],["41","2151","0.6491"],["42","2130","0.6427"],["43","2109","0.6364"],["44","2133","0.6436"],["45","2079","0.6273"],["46","2134","0.6439"],["47","2150","0.6488"],["48","2068","0.624"],["49","2081","0.6279"],["50","2106","0.6355"],["51","2101","0.634"],["52","2106","0.6355"],["53","2152","0.6494"],["54","2119","0.6394"],["55","2093","0.6316"],["56","2064","0.6228"],["57","2067","0.6237"],["58","2139","0.6454"],["59","2136","0.6445"],["60","2110","0.6367"],["61","2125","0.6412"],["62","2095","0.6322"],["63","2121","0.64"],["64","2095","0.6322"],["65","2135","0.6442"],["66","2125","0.6412"],["67","2136","0.6445"],["68","2059","0.6213"],["69","2133","0.6436"],["70","2092","0.6313"],["71","2108","0.6361"],["72","2136","0.6445"],["73","2126","0.6415"],["74","2123","0.6406"],["75","2118","0.6391"],["76","2115","0.6382"],["77","2090","0.6307"],["78","2113","0.6376"],["79","2071","0.6249"],["80","2156","0.6506"],["81","2134","0.6439"],["82","2135","0.6442"],["83","2162","0.6524"],["84","2134","0.6439"],["85","2093","0.6316"],["86","2151","0.6491"],["87","2159","0.6515"],["88","2181","0.6581"],["89","2175","0.6563"],["90","2132","0.6433"],["91","2151","0.6491"],["92","2110","0.6367"],["93","2074","0.6258"],["94","2071","0.6249"],["95","2092","0.6313"],["96","2114","0.6379"],["97","2096","0.6325"],["98","2143","0.6467"],["99","2134","0.6439"],["100","2172","0.6554"]]},{"id":"twos","t":"Proportion of twos in 10 rolls","s":["7.4"],"n":["Sample Number","Number of Twos","Proportion of Twos"],"r":[["1","2","0.2"],["2","1","0.1"],["3","2","0.2"],["4","1","0.1"],["5","2","0.2"],["6","2","0.2"],["7","1","0.1"],["8","2","0.2"],["9","3","0.3"],["10","2","0.2"],["11","1","0.1"],["12","3","0.3"],["13","3","0.3"],["14","1","0.1"],["15","2","0.2"],["16","1","0.1"],["17","1","0.1"],["18","0","0"],["19","2","0.2"],["20","1","0.1"],["21","1","0.1"],["22","3","0.3"],["23","3","0.3"],["24","3","0.3"],["25","1","0.1"],["26","0","0"],["27","1","0.1"],["28","1","0.1"],["29","1","0.1"],["30","4","0.4"],["31","0","0"],["32","1","0.1"],["33","0","0"],["34","0","0"],["35","5","0.5"],["36","1","0.1"],["37","2","0.2"],["38","1","0.1"],["39","2","0.2"],["40","0","0"],["41","1","0.1"],["42","2","0.2"],["43","1","0.1"],["44","2","0.2"],["45","0","0"],["46","3","0.3"],["47","4","0.4"],["48","2","0.2"],["49","2","0.2"],["50","3","0.3"],["51","1","0.1"],["52","1","0.1"],["53","1","0.1"],["54","1","0.1"],["55","2","0.2"],["56","2","0.2"],["57","0","0"],["58","0","0"],["59","2","0.2"],["60","4","0.4"],["61","1","0.1"],["62","1","0.1"],["63","3","0.3"],["64","3","0.3"],["65","1","0.1"],["66","0","0"],["67","4","0.4"],["68","1","0.1"],["69","1","0.1"],["70","5","0.5"],["71","2","0.2"],["72","3","0.3"],["73","1","0.1"],["74","3","0.3"],["75","1","0.1"],["76","3","0.3"],["77","0","0"],["78","2","0.2"],["79","2","0.2"],["80","3","0.3"],["81","2","0.2"],["82","0","0"],["83","2","0.2"],["84","2","0.2"],["85","1","0.1"],["86","4","0.4"],["87","0","0"],["88","3","0.3"],["89","0","0"],["90","3","0.3"],["91","1","0.1"],["92","3","0.3"],["93","0","0"],["94","3","0.3"],["95","0","0"],["96","1","0.1"],["97","1","0.1"],["98","0","0"],["99","2","0.2"],["100","4","0.4"]]},{"id":"impulse-spending","t":"Monthly impulse spending","s":["8.4"],"n":["Monthly Impulse Spending"],"r":[["311"],["392"],["246"],["142"],["292"],["449"],["334"],["354"],["387"],["194"],["261"],["314"],["249"],["350"],["157"],["264"],["345"],["343"],["251"],["437"],["192"],["326"],["163"],["281"],["255"],["218"],["329"],["333"],["299"],["275"],["271"],["339"],["193"],["214"],["238"],["288"]]},{"id":"homework-scores","t":"Homework scores with MyOpenMath","s":["8.4"],"n":["Homework Score (MyOpenMath Free!)"],"r":[["100"],["70.6"],["11.68"],["61.7"],["38.1"],["60.8"],["99.98"],["94.64"],["100"],["100"],["100"],["71.86"],["97.77"],["93.5"],["80.62"],["99.47"],["27.36"],["99.91"],["100"],["99.36"],["57.87"],["95.66"],["96.4"],["80.87"],["100"],["100"],["99.38"],["89.36"],["100"],["98.21"],["98.1"],["79.82"],["75.79"],["99.89"],["97.7"],["94.98"],["100"],["100"],["99.56"],["96.2"],["100"],["69.69"],["81.67"],["61.22"],["92.64"],["100"],["19.18"],["100"],["24.07"],["63.11"],["98.93"],["54.27"],["99.76"],["96.87"],["98.67"],["62.07"],["88.93"],["81.96"],["92.02"],["0"],["11.82"],["100"],["88.51"],["89.36"],["46.09"],["88.16"],["36.09"],["73.04"],["65.22"],["96.73"],["99.89"],["100"],["85.27"],["93.2"],["100"],["40.04"],["48.66"],["34"],["99.16"],["83.92"],["40.87"],["19.74"],["16.82"],["100"],["94.84"],["42.26"],["99.63"],["100"],["87.42"],["16.21"],["20.56"],["76.11"],["81.19"],["85.86"],["100"],["13.92"],["98.34"],["94.25"],["91.59"],["99.95"],["91.51"],["8.42"],["74.61"],["97.29"],["82.86"],["100"],["40.08"],["100"],["94.89"],["96.33"],["65.24"],["31.07"],["100"],["99.74"],["55.89"],["65.81"],["64.06"],["95.19"],["91.04"],["99.53"],["100"],["92.87"],["74.19"],["86.4"],["92.81"],["14.19"],["61.98"],["60.81"],["68.98"],["98"],["54.28"],["91.34"],["97.94"],["40.04"],["78.34"],["70.13"],["46.4"],["100"],["29.35"],["46.3"],["100"],["100"],["46.45"],["93.62"],["25.43"],["85.81"],["34.74"],["85.34"]]}];
+/* TEXTBOOK-DATA-END */
+function loadRowsNamed(nm,rows){
+  data=Array.from({length:Math.min(MAX_ROWS,Math.max(START_ROWS,rows.length+10))},()=>Array(COLS).fill(''));
+  rows.slice(0,MAX_ROWS).forEach((r,i)=>r.forEach((x,c)=>{if(c<COLS)data[i][c]=x;}));
+  for(let c=0;c<COLS;c++) names[c]=c<nm.length&&nm[c]?nm[c]:'Column '+String.fromCharCode(65+c);
+  colSel.fill(false);colManual.fill(true);
+  try{clearSel();}catch(e){}
+  buildHead(); ensureRows(data.length); refreshAll(); fillSortMenu(); update();
+}
+function loadTextbook(id){
+  const S=TBSETS.find(x=>x.id===id);
+  if(!S){msg.textContent='That textbook data set was not found. Choose one from the Textbook Data list.';return false;}
+  loadRowsNamed(S.n,S.r);
+  msg.textContent=`Textbook data loaded: ${S.t} (section ${S.s.join(', ')}; ${S.r.length} rows).`;
+  return true;
+}
+(function(){
+  const sel=$('tbdata'),chs={};
+  TBSETS.forEach(S=>S.s.forEach(sec=>{const ch=sec.split('.')[0];chs[ch]=chs[ch]||[];if(!chs[ch].some(x=>x[1]===S))chs[ch].push([sec,S]);}));
+  Object.keys(chs).sort((a,b)=>a-b).forEach(ch=>{
+    const g=document.createElement('optgroup');g.label='Chapter '+ch;
+    chs[ch].sort((a,b)=>a[0].localeCompare(b[0],undefined,{numeric:true})).forEach(([sec,S])=>{
+      const o=document.createElement('option');o.value=S.id;o.textContent=sec+' '+S.t;g.appendChild(o);});
+    sel.appendChild(g);});
+  sel.onchange=()=>{if(sel.value)loadTextbook(sel.value);sel.value='';sel.blur();};
+})();
+$('pastebtn').onclick=async()=>{
+  let t='';
+  try{t=await navigator.clipboard.readText();}catch(e){t=null;}
+  if(t===null){msg.textContent='This browser did not allow STATBELT to read the clipboard. Click the first cell of the table and paste instead (Ctrl+V, Cmd+V, or long-press and choose Paste on a phone).';return;}
+  if(!t.trim()){msg.textContent='The clipboard is empty. Copy the data first, then press Paste data.';return;}
+  importText(t,'the clipboard');
+};
+window.addEventListener('load',()=>{
+  let id=null;
+  try{id=new URLSearchParams(location.search).get('d');}catch(e){}
+  if(!id){const m=location.hash.match(/(?:^#|&)d=([\w-]+)/);if(m)id=m[1];}
+  if(id) loadTextbook(id.toLowerCase());
+});
 
 /* ---------- statistics ---------- */
 const med = s => { const n=s.length; if(!n) return NaN; return n%2 ? s[(n-1)/2] : (s[n/2-1]+s[n/2])/2; };
@@ -975,6 +1055,25 @@ function gHist(v,name,ref){
   const cap=`${nb} bins, starting at ${s}, each ${w} wide. A bin includes its left edge but not its right edge.`+(showM?` Mean = ${+mean.toFixed(dd)}.`:'')+(showD?` Median = ${+mdn.toFixed(dd)}.`:'');
   return {bins:{s,w,nb,cnt},svg:frame(o),cap:cap+(rel?' Bar heights show relative frequency.':'')+($('hvals').checked&&nb>30?' Bar values are hidden when there are more than 30 bins.':'')};
 }
+function gHistStack(groups,axis){
+  const all=groups.flatMap(g=>g[1]),B=gHist(all,axis,all);if(B.err)return B;
+  const {s,w,nb}=B.bins,rel=$('hy').value==='r',showV=$('hvals').checked&&nb<=30,dd=+$('dec').value,n=groups.length;
+  const cnts=groups.map(([k,v])=>{const c=Array(nb).fill(0);v.forEach(x=>c[Math.min(nb-1,Math.floor((x-s)/w+1e-9))]++);return rel?c.map(q=>q/v.length):c;});
+  const ymax=Math.max(...cnts.flat()),st=rel?niceStep(ymax/2):Math.max(1,niceStep(ymax/2)),top=Math.ceil(ymax/st-1e-9)*st;
+  const Hh=Math.max(GH,MT+MB+n*96),band=(Hh-MT-MB)/n;
+  let o='';
+  groups.forEach(([nm],i)=>{
+    const bt=MT+i*band,y0=bt+band,pt=bt+20,hg=y0-pt,sy=c=>y0-c*hg/top;
+    for(let k=0;k<=Math.round(top/st);k++){const c=+(k*st).toPrecision(10);o+=`<line class="gr" x1="${ML}" x2="${GW-MR}" y1="${sy(c)}" y2="${sy(c)}"/>`+tx(ML-8,sy(c)+4,rel?+c.toFixed(dd):c,'end');}
+    cnts[i].forEach((c,j)=>{o+=`<rect class="bar" x="${ML+j*PW/nb}" y="${sy(c)}" width="${PW/nb}" height="${hg*c/top}"/>`;if(showV&&c>0)o+=tx(ML+j*PW/nb+PW/nb/2,sy(c)-3,rel?+c.toFixed(dd):c,'middle');});
+    o+=`<line class="ax" x1="${ML}" x2="${GW-MR}" y1="${y0}" y2="${y0}"/><line class="ax" x1="${ML}" x2="${ML}" y1="${pt-4}" y2="${y0}"/>`+tx(ML+4,bt+14,E(nm.length>40?nm.slice(0,39)+'…':nm),'start','lbl b');
+  });
+  const yb=Hh-MB,ev=Math.ceil(nb/12);
+  for(let i=0;i<=nb;i+=ev) o+=`<line class="ax" x1="${ML+i*PW/nb}" x2="${ML+i*PW/nb}" y1="${yb}" y2="${yb+5}"/>`+tx(ML+i*PW/nb,yb+27,+(s+i*w).toPrecision(12));
+  o+=tx(ML+PW/2,Hh-8,E(axis),'middle','lbl b')+`<text class="lbl b" transform="translate(14 ${MT+(Hh-MT-MB)/2}) rotate(-90)" text-anchor="middle">${rel?'Relative frequency':'Frequency'}</text>`;
+  const extra=($('hmean').checked||$('hmed').checked)?' Mean and median lines are not drawn on stacked histograms.':'';
+  return {svg:`<svg class="gsvg" viewBox="0 0 ${GW} ${Hh}" role="img" aria-label="Graph">${o}</svg>`,gh:Hh,cap:`${n} histograms stacked above one common horizontal axis and one common vertical scale. ${nb} bins, starting at ${s}, each ${w} wide. A bin includes its left edge but not its right edge.`+(rel?' Bar heights show relative frequency within each group.':'')+extra};
+}
 function gBox(v,name){
   {const mc=boxCols();if(mc.length>1) return gBoxMulti(mc);}
   const s=[...v].sort((a,b)=>a-b);
@@ -1096,6 +1195,7 @@ function drawGraph(){
   const c=+$('gcol').value;
   $('gcolrow').hidden=(t==='ts'||(t==='box'&&!$('ggroup').value));
   $('bcolbox').hidden=!!$('ggroup').value;
+  $('hstackrow').hidden=!(t==='hist'&&$('ggroup').value!=='');
   placeGroup(t);
   ['hist','box','stem','dot','ts','qq'].forEach(k=>$('o-'+k).hidden=(k!==t));
   $('hs').disabled=$('hw').disabled=$('hauto').checked;
@@ -1198,7 +1298,7 @@ GS=SCHEMES.purple;
 const TYPES={hist:'Histogram',box:'Boxplot',stem:'Stem and leaf plot',dot:'Dot plot',ts:'Time series plot',qq:'Q-Q plot'};
 function exportSvg(html,big){
   const d=document.createElement('div');d.innerHTML=html;const s=d.firstElementChild;
-  s.setAttribute('width',GW*2);s.setAttribute('height',GH*2);s.removeAttribute('class');
+  s.setAttribute('width',GW*2);s.setAttribute('height',(+(s.getAttribute('viewBox')||'').split(' ')[3]||GH)*2);s.removeAttribute('class');
   s.querySelectorAll('[class]').forEach(el=>{let st='';el.getAttribute('class').split(' ').forEach(k=>{if(EXS[k])st+=EXS[k].split('#6b46c1').join(GS.acc).split('#e6dff5').join(GS.light).split('#000001').join(GS.mid).split('#000002').join(GS.soft)+';';if(k==='b')st+='font-size:13px;font-weight:600;';if(big&&k==='nzt')st+='font-size:22px;';if(big&&k==='sha')st+='font-size:19px;';});el.setAttribute('style',st);el.removeAttribute('class');});
   return new XMLSerializer().serializeToString(s);
 }
@@ -1238,7 +1338,7 @@ function mathLayout(ctx,blocks,maxW){
 async function pngCanvas(g){
   const S=2,W=GW,m=document.createElement('canvas').getContext('2d');
   let img=null,fh,fw=W;
-  if(g.svg){img=await svgImg(exportSvg(g.svg,g.big));fh=GH;}
+  if(g.svg){img=await svgImg(exportSvg(g.svg,g.big));fh=g.gh||GH;}
   else if(g.math){g._ml=mathLayout(m,g.math,W-40);fw=Math.max(W,g._ml.width+40);fh=g._ml.height+16;}
   else if(g.lines){m.font='15px Menlo,Consolas,monospace';fw=Math.max(W,Math.max(...g.lines.map(l=>m.measureText(l).width))+40);fh=g.lines.length*24+16;}
   else{m.font='600 14px Arial,sans-serif';const T0=g.table;
@@ -1255,7 +1355,7 @@ async function pngCanvas(g){
   x.textAlign=g.big?'center':'left';x.fillStyle='#241a3a';x.font=g.big?'700 24px Arial,sans-serif':'600 18px Arial,sans-serif';x.fillText(g.title,g.big?fw/2:16,g.big?33:30);x.textAlign='left';
   if(PH){x.font='15px Arial,sans-serif';(g.pre||[]).forEach((l,i)=>x.fillText(l,16,52+i*22));}
   x.save();x.translate(0,PH);
-  if(img) x.drawImage(img,(fw-W)/2,44,W,GH);
+  if(img) x.drawImage(img,(fw-W)/2,44,W,g.gh||GH);
   else if(g.math){let yy=44+8;g._ml.rows.forEach(r=>{x.save();x.translate(20,yy);r.draw(x,0);x.restore();yy+=r.h;});}
   else if(g.lines){x.font='15px Menlo,Consolas,monospace';g.lines.forEach((l,i)=>x.fillText(l,20,44+20+i*24));}
   else{
@@ -1278,7 +1378,7 @@ async function pngCanvas(g){
   }
   x.restore();
   x.fillStyle='#241a3a';if(g.big){x.textAlign='center';eqL.forEach(([t,b],i)=>{x.font=(b?'700 24px':'500 20px')+' Arial,sans-serif';x.fillText(t,fw/2,44+PH+fh+28+i*30);});x.textAlign='left';}else eqL.forEach(([t,b],i)=>{x.font=(b?'600 16px':'15px')+' Arial,sans-serif';x.fillText(t,16,44+PH+fh+22+i*22);});
-  x.font='13px Arial,sans-serif';x.fillStyle='#6b5f86';cap.forEach((l,i)=>x.fillText(l,16,44+PH+fh+eh+18+i*18));
+  x.font='13px Arial,sans-serif';x.fillStyle='#6b5f86';x.textAlign=g.big?'center':'left';cap.forEach((l,i)=>x.fillText(l,g.big?fw/2:16,44+PH+fh+eh+18+i*18));x.textAlign='left';
   return cv;
 }
 /* save a file: the host's download capability when present, otherwise an ordinary browser download */
@@ -1337,7 +1437,7 @@ function makePop(g,cv){
   const old=editTarget;
   if(old&&old.isConnected&&g.edit&&old._sec===g.edit.sec){p.style.left=old.style.left;p.style.top=old.style.top;p.style.width=old.style.width;if(old._batch)document.querySelectorAll('.pop').forEach(q=>{if(q!==old&&q._batch===old._batch)q.remove();});old.remove();}
   editTarget=null;
-  p.innerHTML=`<div class="ph"><span>${E(g.title)}</span><button class="x" aria-label="Close graph">\u00d7</button></div><div class="pb"><div class="iw"><img alt="${E(g.title)}"><div class="tip" hidden></div></div></div><div class="pf"><button class="primary" data-a="copy">Copy image</button><button data-a="save">Save PNG</button><button data-a="edit">Edit</button><span class="pm" role="status">You can also right-click (or long-press) the image to copy or save it.</span></div>`;
+  p.innerHTML=`<div class="ph"><span>${E(g.title)}</span><button class="mn" aria-label="Minimize window" title="Minimize (restore it from the Windows bar at the bottom)">\u2013</button><button class="x" aria-label="Close graph">\u00d7</button></div><div class="pb"><div class="iw"><img alt="${E(g.title)}"><div class="tip" hidden></div></div></div><div class="pf"><button class="primary" data-a="copy">Copy image</button><button data-a="save">Save PNG</button><button data-a="edit">Edit</button><span class="pm" role="status">You can also right-click (or long-press) the image to copy or save it.</span></div>`;
   p.querySelector('img').src=cv.toDataURL('image/png');
   if(g.hist) setupHist(p,g,cv);
   if(g.sc) setupSc(p,g,cv);
@@ -1359,6 +1459,7 @@ function makePop(g,cv){
     iw.addEventListener('pointermove',show);iw.addEventListener('pointerdown',show);iw.addEventListener('pointerleave',()=>{tip.hidden=true;});
   }
   p.querySelector('.x').onclick=()=>{if(editTarget===p)editTarget=null;p.remove();};
+  p.querySelector('.mn').onclick=()=>popMin(p,true);
   const rs=document.createElement('button');rs.className='rs';rs.textContent='Show';
   rs.title='Show this display using the current options';
   rs.onclick=async()=>{
@@ -1394,7 +1495,7 @@ function makePop(g,cv){
     try{await saveFile(g.title.replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'-')+'.png',await toBlob(cv));pm.textContent='Saved (check your Downloads folder if you do not see a prompt). If nothing was saved, right-click the image and choose Save image as.';}
     catch(e){pm.textContent=(e&&e.code==='declined')?'Save canceled.':'Saving did not work here. Right-click (or long-press) the image and choose Save image as.';}
   };
-  document.body.appendChild(p);p.focus();
+  document.body.appendChild(p);p.focus();trayUpdate();
 }
 
 /* ---------- histogram: highlight values and classes ---------- */
@@ -1912,6 +2013,41 @@ function markBad(){
     if(t&&n>=t) data.forEach((r,i)=>{if(r[c].trim()!==''&&!isNum(r[c])){const e=cell(i,c);if(e)e.classList.add('bad');}});
   }
 }
+/* ----- Windows bar: minimize, restore and tile result windows ----- */
+function popMin(p,on){p.classList.toggle('min',on);if(!on){p.style.zIndex=++zTop;}trayUpdate();}
+function trayUpdate(){
+  let tr=document.getElementById('poptray');
+  if(!tr){
+    tr=document.createElement('div');tr.id='poptray';tr.hidden=true;tr.setAttribute('role','toolbar');tr.setAttribute('aria-label','Open result windows');
+    tr.innerHTML='<span class="tl">Windows</span><div class="tc"></div><button class="tb" data-a="tile" title="Arrange the open windows side by side">Tile</button><button class="tb" data-a="minall">Minimize all</button><button class="tb" data-a="showall">Show all</button>';
+    document.body.appendChild(tr);
+    tr.addEventListener('click',e=>{
+      const c=e.target.closest('.chip'),b=e.target.closest('.tb'),all=[...document.querySelectorAll('.pop')];
+      if(c){const p=all[+c.dataset.i];if(!p)return;
+        const top=Math.max(...all.filter(q=>!q.classList.contains('min')).map(q=>+q.style.zIndex||0),0);
+        if(p.classList.contains('min'))popMin(p,false);
+        else if((+p.style.zIndex||0)>=top&&all.filter(q=>!q.classList.contains('min')).length>=1)popMin(p,true);
+        else{p.style.zIndex=++zTop;trayUpdate();}
+        return;}
+      if(!b)return;
+      if(b.dataset.a==='minall')all.forEach(q=>q.classList.add('min'));
+      else if(b.dataset.a==='showall')all.forEach(q=>q.classList.remove('min'));
+      else if(b.dataset.a==='tile'){
+        all.forEach(q=>q.classList.remove('min'));
+        const n=all.length;if(!n)return;
+        const cols=innerWidth<700?1:(n<=3?n:Math.ceil(n/2)),rows=Math.ceil(n/cols),gap=8,top0=52,aw=innerWidth-16,ah=innerHeight-top0-56;
+        const w=(aw-(cols-1)*gap)/cols,h=Math.max(140,(ah-(rows-1)*gap)/rows);
+        all.forEach((q,i)=>{q.style.left=(8+(i%cols)*(w+gap))+'px';q.style.top=(top0+Math.floor(i/cols)*(h+gap))+'px';q.style.width=w+'px';q.style.height=h+'px';q.style.zIndex=++zTop;});
+      }
+      trayUpdate();
+    });
+    new MutationObserver(()=>trayUpdate()).observe(document.body,{childList:true});
+  }
+  const all=[...document.querySelectorAll('.pop')];
+  tr.hidden=!all.length;document.body.style.paddingBottom=all.length?'56px':'';
+  const top=Math.max(...all.filter(q=>!q.classList.contains('min')).map(q=>+q.style.zIndex||0),-1);
+  tr.querySelector('.tc').innerHTML=all.map((q,i)=>{const m=q.classList.contains('min'),a=!m&&(+q.style.zIndex||0)===top;return `<button class="chip${m?' isMin':''}${a?' act':''}" data-i="${i}" title="${E(q.getAttribute('aria-label')||'')}${m?' (minimized: click to show)':a?' (click to minimize)':' (click to bring to front)'}">${E(q.getAttribute('aria-label')||'Window')}</button>`;}).join('');
+}
 function miniBatch(p,on){document.querySelectorAll('.pop').forEach(q=>{if(q===p||(p._batch&&q._batch===p._batch)) q.classList.toggle('mini',on);});}
 var tSel=Array(COLS).fill(false),tManual=Array(COLS).fill(false);
 function fillTsChecks(){
@@ -2004,7 +2140,7 @@ async function makeGrouped(ge){
   const pop=async(title,f,label)=>{
     if(f.err){skipped.push(`${label}: ${f.err}`);return;}
     const g={title,cap:f.cap||'',edit,batch};
-    if(f.svg){g.svg=f.svg;g.hot=f.hot;if(f.sc)g.sc=f.sc;}
+    if(f.svg){g.svg=f.svg;g.hot=f.hot;if(f.sc)g.sc=f.sc;if(f.gh)g.gh=f.gh;}
     else{const d=document.createElement('div');d.innerHTML=f.html;g.lines=d.querySelector('pre').textContent.split('\n');}
     makePop(g,await pngCanvas(g));n++;
   };
@@ -2021,13 +2157,14 @@ async function makeGrouped(ge){
       if(!grps.length){ge.textContent='Choose a column of numbers and a Group by column that both have data.';return;}
       if(grps.length>12){ge.textContent=`The Group by column has ${grps.length} categories. Choose one with 12 or fewer.`;return;}
       if(t==='box') await pop(`Boxplots of ${names[c]} by ${names[gc]}`,gBoxMulti([],grps,names[c],{c,gc}),'Boxplots');
+      else if(t==='hist'&&$('hstack').checked) await pop(`Stacked histograms of ${names[c]} by ${names[gc]}`,gHistStack(grps,names[c]),'Histograms');
       else if(t==='dot') await pop(`Dot plots of ${names[c]} by ${names[gc]}`,gDotStack(grps,names[c],{c,gc}),'Dot plots');
       else{
         const ref=[].concat(...grps.map(x=>x[1]));
         for(const [k,v] of grps){const nm=`${names[c]} (${k})`;await pop(`${TYPES[t]} of ${nm}`,t==='hist'?gHist(v,nm,ref):t==='stem'?gStem(v,nm):t==='qq'?gQQ(v,nm):gDot(v,nm),k);}
       }
     }
-    ge.textContent=(n?`Opened ${n} graph${n>1?'s':''}${(t==='box'||t==='dot')?' (groups on the same axis)':', one per group'}. `:'')+(skipped.length?`Skipped: ${skipped.join('; ')}`:'');
+    ge.textContent=(n?`Opened ${n} graph${n>1?'s':''}${(t==='box'||t==='dot'||(t==='hist'&&$('hstack').checked))?' (groups on the same axis)':', one per group'}. `:'')+(skipped.length?`Skipped: ${skipped.join('; ')}`:'');
   }catch(err){ge.textContent='The graphs could not be drawn. Please try again.';}
 }
 
@@ -2228,7 +2365,7 @@ const CONT={
       if(!(P.lo<P.hi)) return {err:'The minimum must be less than the maximum.'};
       const w=P.hi-P.lo,cdf=x=>x<=P.lo?0:x>=P.hi?1:(x-P.lo)/w,sf=x=>x<=P.lo?1:x>=P.hi?0:(P.hi-x)/w;
       return {cdf,sf,qL:p=>P.lo+p*w,qR:p=>P.hi-p*w,lo:P.lo,hi:P.hi,fixedLo:false,
-        rows:[['Minimum',cfx(P.lo)],['Maximum',cfx(P.hi)],['Mean μ = (min + max)/2',cfx((P.lo+P.hi)/2)],['Standard deviation σ',String(+(w/Math.sqrt(12)).toPrecision(7))]]};
+        rows:[['Minimum',cfx(P.lo)],['Maximum',cfx(P.hi)],['Height 1/(max − min)',String(+(1/w).toPrecision(7))],['Mean μ = (min + max)/2',cfx((P.lo+P.hi)/2)],['Standard deviation σ',String(+(w/Math.sqrt(12)).toPrecision(7))]]};
     }}
 };
 function contCalc(D,mode,d,v,P){
@@ -2446,8 +2583,8 @@ function discCustomCalc(pairs,mode,a,b,d){
       res.segs.forEach(([a,b])=>{a=Math.max(a,x0);b=Math.min(b,x1);if(b>a)o+=`<path class="ns" d="M${sx(a).toFixed(1)} ${y0}${path(a,b)} L${sx(b).toFixed(1)} ${y0} Z"/>`;});
       o+=`<path class="nc" d="M${path(x0,x1).slice(2)}"/><line class="ax" x1="${ML}" x2="${GW-MR}" y1="${y0}" y2="${y0}"/>`;
       if(ax==='sd'){
-        for(let k=-Math.floor(zm);k<=Math.floor(zm);k++){const x=mu+k*sd;
-          o+=`<line class="ax" x1="${sx(x)}" x2="${sx(x)}" y1="${y0}" y2="${y0+5}"/>`+tx(sx(x),y0+19,E(cfx(x)))+tx(sx(x),y0+34,k===0?'μ':'μ '+(k<0?'−':'+')+' '+(Math.abs(k)===1?'':Math.abs(k))+'σ');}
+        for(let k=-Math.floor(zm);k<=Math.floor(zm);k++){const x=mu+k*sd,xr=Math.abs(sd)<0.05?+x.toPrecision(4):+x.toFixed(2);
+          o+=`<line class="ax" x1="${sx(x)}" x2="${sx(x)}" y1="${y0}" y2="${y0+5}"/>`+(k%(zm>6?2:1)?'':tx(sx(x),y0+19,E(String(Math.abs(xr)<1e-9?0:xr)))+tx(sx(x),y0+34,k===0?'μ':'μ '+(k<0?'−':'+')+' '+(Math.abs(k)===1?'':Math.abs(k))+'σ'));}
       }else{
         ticks(x0,x1,8).forEach(t=>o+=`<line class="ax" x1="${sx(t)}" x2="${sx(t)}" y1="${y0}" y2="${y0+5}"/>`+tx(sx(t),y0+19,E(cfx(t))));
       }
@@ -2461,6 +2598,8 @@ function discCustomCalc(pairs,mode,a,b,d){
       let o='';
       res.segs.forEach(([p,q])=>{p=Math.max(p,lo);q=Math.min(q,hi);if(q>p)o+=`<rect class="ns" x="${sx(p).toFixed(1)}" y="${yh}" width="${(sx(q)-sx(p)).toFixed(1)}" height="${y0-yh}"/>`;});
       o+=`<path class="nc" d="M${sx(x0)} ${y0} L${sx(lo)} ${y0} L${sx(lo)} ${yh} L${sx(hi)} ${yh} L${sx(hi)} ${y0} L${sx(x1)} ${y0}"/><line class="ax" x1="${ML}" x2="${GW-MR}" y1="${y0}" y2="${y0}"/>`;
+      {const hs=String(+(1/w).toPrecision(4));
+        o+=`<line class="ax" x1="${ML}" x2="${ML}" y1="${yh-8}" y2="${y0}"/><line class="ax" x1="${ML-5}" x2="${ML}" y1="${yh}" y2="${yh}"/><line class="ax" x1="${ML-5}" x2="${ML}" y1="${y0}" y2="${y0}"/>`+tx(ML-8,yh+4,E(hs),'end')+tx(ML-8,y0+4,'0','end')+tx(ML-8,yh-14,'Height','end');}
       ticks(x0,x1,8).forEach(t=>o+=`<line class="ax" x1="${sx(t)}" x2="${sx(t)}" y1="${y0}" y2="${y0+5}"/>`+tx(sx(t),y0+19,E(cfx(t))));
       res.marks.forEach((m,mi)=>{const two=res.marks.length>1,an=!two?'middle':(mi===0?'end':'start'),dx=!two?0:(mi===0?-5:5),yy=Math.min(yh,m>=lo&&m<=hi?yh:y0);
         o+=`<line class="nz" x1="${sx(m)}" x2="${sx(m)}" y1="${yy-6}" y2="${y0}"/>`+`<text class="nzt" x="${sx(m)+dx}" y="${yy-10}" text-anchor="${an}">${E(String(+m.toFixed(d)))}</text>`;});
@@ -3176,7 +3315,7 @@ function discCustomCalc(pairs,mode,a,b,d){
     // o: sym (μ or μd), zopt (allow z), word for the claim
     const s0=o.zero;
     buildMean(k,sec,
-      `<div class="cl"><label for="${k}-m0">Hypothesized ${o.nm} ${o.sym}₀</label><input type="text" id="${k}-m0" value="${s0}" inputmode="decimal"></div>`
+      `<div class="cl"><label for="${k}-m0">Hypothesized ${o.nm} ${o.sym}₀</label><input type="text" id="${k}-m0" value="${s0}" autocapitalize="off" autocorrect="off" spellcheck="false"></div>`
       +`<div class="cl"><label for="${k}-side">Type of test</label><select id="${k}-side">${SIDEOPT(o.sym,o.sym+'₀')}</select></div>`
       +`<div class="cl"><label for="${k}-a">Significance level α</label><input type="text" id="${k}-a" value="0.05" inputmode="decimal"></div>`
       +(o.zopt?`<div class="cl"><label for="${k}-proc">Procedure</label><select id="${k}-proc"><option value="t">t test (σ unknown)</option><option value="z">z test (σ known)</option></select></div>${fld(k+'-sig','Population standard deviation σ','step="any" min="0"')}`:''),
@@ -3221,7 +3360,7 @@ function discCustomCalc(pairs,mode,a,b,d){
   const pooled=(a,b)=>{const sp2=((a.n-1)*a.sd*a.sd+(b.n-1)*b.sd*b.sd)/(a.n+b.n-2),se=Math.sqrt(sp2*(1/a.n+1/b.n));return {se,df:a.n+b.n-2,sp:Math.sqrt(sp2)};};
   const METH=`<div class="cl"><label for="K-meth">Method</label><select id="K-meth"><option value="welch">Welch (does not assume equal variances)</option><option value="pool">Pooled (assumes equal variances)</option></select></div>`;
   buildMean('mt2','t-mt2',
-    `<div class="cl"><label for="mt2-m0">Hypothesized difference Δ₀ (μ₁ − μ₂)</label><input type="text" id="mt2-m0" value="0" inputmode="decimal"></div>`
+    `<div class="cl"><label for="mt2-m0">Hypothesized difference Δ₀ (μ₁ − μ₂)</label><input type="text" id="mt2-m0" value="0" autocapitalize="off" autocorrect="off" spellcheck="false"></div>`
     +`<div class="cl"><label for="mt2-side">Type of test</label><select id="mt2-side">${SIDEOPT('μ₁ − μ₂','Δ₀')}</select></div>`
     +`<div class="cl"><label for="mt2-a">Significance level α</label><input type="text" id="mt2-a" value="0.05" inputmode="decimal"></div>`+METH.replace(/K-meth/g,'mt2-meth'),
     ([a,b],d)=>{
@@ -4119,7 +4258,8 @@ function discCustomCalc(pairs,mode,a,b,d){
     <p class="small" id="cr-yn" hidden></p>
     <p class="small" id="cr-cc-sq-note" hidden>Turn on “Show r²” to also see an interpretation of r².</p>
     <div id="cr-out" aria-live="polite"></div>
-    <div class="row" style="margin-top:10px"><button class="primary" id="crwin" disabled>Show results in a new window</button></div><p class="small">The window lets you copy the table as an image, save it as a PNG, or edit the selection.</p></div><div class="rgr"><div id="cr-gr"></div></div></div>`);
+    <div class="row" style="margin-top:10px"><button class="primary" id="crwin" disabled>Show results in a new window</button></div><p class="small">The window lets you copy the table as an image, save it as a PNG, or edit the selection.</p>
+    <div class="row" style="margin-top:10px"><button class="cr-toreg" id="cr-toreg" disabled>Open selected columns in the regression menu</button></div><p class="small" id="cr-toreg-n">Select exactly two columns to use this.</p></div><div class="rgr"><div id="cr-gr"></div></div></div>`);
   let crSel=new Set();
   function fillCr(){
     const nc=numCols();crSel=new Set([...crSel].filter(i=>nc.includes(i)));
@@ -4139,7 +4279,7 @@ function discCustomCalc(pairs,mode,a,b,d){
     const xr=sp&&s.length===2;$('cr-xrow').hidden=!xr;$('cr-yn').hidden=!xr;
     if(xr){const xv=$('cr-xv'),ov=xv.value;xv.innerHTML=s.map(i=>`<option value="${i}">${E(names[i])}</option>`).join('');xv.value=s.map(String).includes(ov)?ov:String(s[0]);$('cr-yn').textContent='Response variable (y): '+names[s.find(i=>String(i)!==xv.value)];}
     if(sp&&s.length!==2)gr.innerHTML='<p class="small" role="status">Select exactly two columns to see a scatterplot.</p>';
-    $('cr-cc-sq-note').hidden=!(cc&&!sq);lastC=null;$('crwin').disabled=true;
+    $('cr-cc-sq-note').hidden=!(cc&&!sq);$('cr-toreg').disabled=s.length!==2;$('cr-toreg-n').hidden=s.length===2;lastC=null;$('crwin').disabled=true;
     if(s.length<2){o.innerHTML='<p class="small" role="status">Select at least two columns.</p>';return;}
     let title,cap,html,g,concl=[];
     if(s.length===2){
@@ -4188,7 +4328,7 @@ function discCustomCalc(pairs,mode,a,b,d){
       const xi=+$('cr-xv').value,yi=s.find(i=>i!==xi),P2=pairs(xi,yi),t2=stats(P2);
       const S=scatter(P2,t2,{line:false,res:false,pred:null,d,xn:names[xi],yn:names[yi]});
       lastCG={title:'Scatterplot: '+names[yi]+' vs '+names[xi],svg:S.svg,hot:S.hot,sc:scPts(S.svg,P2,xi,yi),cap:`Explanatory variable (x): ${names[xi]}; response variable (y): ${names[yi]}; n = ${t2.n}; r = ${t2.r.toFixed(d)}`};
-      gr.innerHTML=`<div class="rgiw" style="position:relative">${S.svg}<div class="tip" hidden></div></div><div class="row"><button id="cr-win2">Open graph in a new window</button></div><p class="small">Hover over a point to see its values.</p>`;
+      gr.innerHTML=`<div class="rgiw" style="position:relative">${S.svg}<div class="tip" hidden></div></div><div class="row"><button id="cr-win2">Open graph in a new window</button><button class="cr-toreg" id="cr-toreg2">Open these columns in the regression menu</button></div><p class="small">Hover over a point to see its values.</p>`;
       const iw=gr.querySelector('.rgiw'),sv=iw.querySelector('svg'),tip=iw.querySelector('.tip');
       const show=e=>{
         const r=sv.getBoundingClientRect(),px=(e.clientX-r.left)/r.width*GW,py=(e.clientY-r.top)/r.height*GH;
@@ -4211,6 +4351,17 @@ function discCustomCalc(pairs,mode,a,b,d){
   csec.addEventListener('click',async e=>{
     if(e.target.id==='cr-win2'&&lastCG){const prev=GS;GS=SCHEMES.purple;try{const cv=await pngCanvas(lastCG);GS=prev;makePop(lastCG,cv);}catch(err){GS=prev;}}
   });
+  csec.addEventListener('click',e=>{
+    const b=e.target.closest&&e.target.closest('.cr-toreg');if(!b||b.disabled)return;
+    const s=[...crSel].sort((a,c)=>a-c);if(s.length!==2)return;
+    const fromSp=b.id==='cr-toreg2',xi=(!$('cr-xrow').hidden&&$('cr-sp').checked)?+$('cr-xv').value:s[0],yi=s.find(i=>i!==xi);
+    const dec=$('cr-dec').value,al=$('cr-al').value;
+    const nav=document.querySelector('.dd button[data-sec="d-reg"]');if(!nav)return;nav.click();
+    $('rg-x').value=String(xi);$('rg-y').value=String(yi);$('rg-dec').value=dec;$('rg-al').value=al;
+    if(fromSp)$('rg-sc').checked=true;
+    $('rg-y').dispatchEvent(new Event('change',{bubbles:true}));
+    try{rsec.scrollIntoView({block:'nearest'});}catch(err){}
+  });
   csec.addEventListener('change',e=>{const i=e.target.dataset&&e.target.dataset.i;if(i!==undefined&&i!==''){e.target.checked?crSel.add(+i):crSel.delete(+i);}runCr();});
 
   /* ----- regression ----- */
@@ -4231,7 +4382,7 @@ function discCustomCalc(pairs,mode,a,b,d){
         <div class="checks"><label><input type="checkbox" id="rg-ln"> Show regression line</label>
         <label><input type="checkbox" id="rg-pr"> Make a prediction</label>
         <label><input type="checkbox" id="rg-rs"> Show residuals</label></div>
-        <div class="row" id="rg-prrow" hidden><label class="t" for="rg-px">Predict y when x =</label><input type="text" id="rg-px" inputmode="decimal" style="width:110px"></div>
+        <div class="row" id="rg-prrow" hidden><label class="t" for="rg-px">Predict y when x =</label><input type="text" id="rg-px" style="width:110px" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
         <div id="rg-pout" aria-live="polite"></div>
       </div>
     </div></div>
