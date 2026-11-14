@@ -898,8 +898,22 @@ window.addEventListener('load',()=>{
   let id=null;
   try{id=new URLSearchParams(location.search).get('d');}catch(e){}
   if(!id){const m=location.hash.match(/(?:^#|&)d=([\w-]+)/);if(m)id=m[1];}
-  if(id) loadTextbook(id.toLowerCase());
+  if(id){loadTextbook(id.toLowerCase());return;}
+  loadSimData();
 });
+/* Data sent from a textbook simulation or game: /statbelt/#sim=<encodeURIComponent(JSON)>
+   JSON = {"t":"title","n":["Column name",...],"c":[[column 1 values],[column 2 values],...]} */
+function loadSimData(){
+  const m=location.hash.match(/(?:^#|&)sim=([^&]+)/);if(!m)return false;
+  let S;try{S=JSON.parse(decodeURIComponent(m[1]));}catch(e){msg.textContent='The simulation data could not be read. Run the simulation again and press Open in STATBELT.';return false;}
+  const cols=(S.c||[]).slice(0,COLS).map(c=>(c||[]).map(v=>v==null?'':String(v)));
+  const n=Math.max(0,...cols.map(c=>c.length));
+  const rows=Array.from({length:n},(_,i)=>cols.map(c=>c[i]??''));
+  loadRowsNamed((S.n||[]).map(x=>String(x).slice(0,30)),rows);
+  msg.textContent=`Simulation data loaded: ${S.t?String(S.t).slice(0,80)+' ':''}(${n} row${n===1?'':'s'}).`;
+  try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}
+  return true;
+}
 
 /* ---------- statistics ---------- */
 const med = s => { const n=s.length; if(!n) return NaN; return n%2 ? s[(n-1)/2] : (s[n/2-1]+s[n/2])/2; };
